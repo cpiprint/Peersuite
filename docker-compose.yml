@@ -1,0 +1,23 @@
+version: '3'
+
+services:
+  peersuite:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: peersuite:latest
+    container_name: peersuite
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    volumes: []
+    # This volume is optional, useful for development to see changes without rebuilding;
+    # if needed, uncomment and ensure proper formatting:
+    #  - ./:/usr/share/nginx/html
+    networks:
+      - peersuite-network
+
+# Define a network for the service
+networks:
+  peersuite-network:
+    driver: bridge
