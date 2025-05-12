@@ -8,4 +8,4 @@ The tools included are chat with file send, collaboarative document editing, a k
 
 This is the initial public release, happy to check out some PRs
 
-Usage: You can visit https://peersuite.space, download the files and run them yourself, or grab an executable from releases.
+Usage: You can use https://peersuite.space online, download the files and run them yourself, or grab an executable from releases.
