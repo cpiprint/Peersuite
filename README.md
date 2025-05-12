@@ -36,5 +36,3 @@ Alternatively, you can use the provided `docker-compose.yml` file:
     This will also start Peersuite and make it accessible at [http://localhost:8080](http://localhost:8080).
 
 
-
-    If any teams are in need of a modified/whitelabel version, please message me.
