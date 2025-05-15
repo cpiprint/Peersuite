@@ -55,6 +55,11 @@ const localVideoContainer = document.getElementById('localVideoContainer');
 const localVideo = document.getElementById('localVideo');
 const remoteVideoChatContainer = document.getElementById('remoteVideoChatContainer');
 
+const audioChatSection = document.getElementById('audioChatSection');
+const startAudioCallBtn = document.getElementById('startAudioCallBtn');
+const stopAudioCallBtn = document.getElementById('stopAudioCallBtn');
+const audioChatStatus = document.getElementById('audioChatStatus');
+
 const whiteboardCanvas = document.getElementById('whiteboardCanvas');
 const wbColorPicker = document.getElementById('wbColorPicker');
 const wbLineWidth = document.getElementById('wbLineWidth');
@@ -79,12 +84,13 @@ const docUnderlineBtn = document.getElementById('docUnderlineBtn');
 const docUlBtn = document.getElementById('docUlBtn');
 const docOlBtn = document.getElementById('docOlBtn');
 const downloadTxtBtn = document.getElementById('downloadTxtBtn');
-const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+// const downloadPdfBtn = document.getElementById('downloadPdfBtn'); // Removed
 
 // Global State
 let roomApi;
 let localScreenShareStream;
 let localVideoCallStream;
+let localAudioStream;
 let localNickname = '';
 let currentRoomId = '';
 let currentActiveSection = 'chatSection';
@@ -108,6 +114,7 @@ let sendDocumentContentUpdate, onDocumentContentUpdate;
 let incomingFileBuffers = new Map();
 let kanbanData = { columns: [] };
 let peerVideoElements = {};
+let peerAudios = {}; 
 
 let documents = [];
 let currentActiveDocumentId = null;
@@ -277,6 +284,50 @@ function handleIncomingVideoChatStream(stream, peerId) {
     showNotification('videoChatSection');
 }
 
+function handleIncomingAudioChatStream(stream, peerId) {
+    if (peerId === localGeneratedPeerId) return; 
+    const streamPeerNickname = peerNicknames[peerId] || `User ${peerId.substring(0, 6)}`;
+    logStatus(`Receiving Audio Chat stream from ${streamPeerNickname}.`);
+
+    if (peerAudios[peerId]) { 
+        peerAudios[peerId].pause();
+        peerAudios[peerId].srcObject = null;
+        delete peerAudios[peerId];
+    }
+
+    const audioEl = document.createElement('audio');
+    audioEl.srcObject = stream;
+    audioEl.autoplay = true; 
+    audioEl.addEventListener('canplaythrough', () => {
+        audioEl.play().catch(e => console.warn(`Audio play failed for ${streamPeerNickname}:`, e));
+    });
+    audioEl.addEventListener('error', (e) => {
+        console.error(`Error with audio element for ${streamPeerNickname}:`, e);
+    });
+    peerAudios[peerId] = audioEl;
+
+    stream.onremovetrack = () => {
+        if (stream.getTracks().length === 0 && peerAudios[peerId]) {
+            peerAudios[peerId].pause();
+            peerAudios[peerId].srcObject = null;
+            delete peerAudios[peerId];
+            logStatus(`Audio chat stream ended from ${streamPeerNickname}`);
+        }
+    };
+    stream.getTracks().forEach(track => {
+        track.onended = () => {
+             if ((!stream.active || stream.getTracks().every(t => t.readyState === 'ended')) && peerAudios[peerId]) {
+                peerAudios[peerId].pause();
+                peerAudios[peerId].srcObject = null;
+                delete peerAudios[peerId];
+                logStatus(`Audio chat track ended from ${streamPeerNickname}`);
+            }
+        };
+    });
+    showNotification('audioChatSection');
+}
+
+
 triggerFileInput.addEventListener('click', () => chatFileInput.click());
 chatFileInput.addEventListener('change', async (event) => {
     const file = event.target.files[0]; if (!file || !roomApi) return;
@@ -329,12 +380,10 @@ function resizeWhiteboardCanvas() {
         return;
     }
 
-
     if (whiteboardCanvas.width !== displayWidth || whiteboardCanvas.height !== displayHeight) {
         whiteboardCanvas.width = displayWidth;
         whiteboardCanvas.height = displayHeight;
     }
-
 
     redrawWhiteboardFromHistory();
 }
@@ -677,14 +726,11 @@ function initDocumentsModule() {
         URL.revokeObjectURL(link.href);
     });
 
-    downloadPdfBtn.addEventListener('click', () => {
-        if (!currentActiveDocumentId) { logStatus("No active document to print/save as PDF.", true); return; }
-        logStatus("Preparing document for printing (Save as PDF)...");
-        loadActiveDocumentContent();
-        setTimeout(() => window.print(), 100);
-    });
+    // PDF Download functionality is removed.
+    // If you had a downloadPdfBtn variable, ensure it's not referenced or its event listener is removed.
+    // The button itself should be removed from index.html.
 
-    newDocBtn.addEventListener('click', handleCreateNewDocument);
+    newDocBtn.addEventListener('click', () => handleCreateNewDocument());
     renameDocBtn.addEventListener('click', handleRenameDocument);
     deleteDocBtn.addEventListener('click', handleDeleteDocument);
 
@@ -745,7 +791,6 @@ function loadActiveDocumentContent() {
 }
 
 function setActiveDocument(documentId) {
-    // Save current doc content before switching (if it exists and has changed)
     if (currentActiveDocumentId) {
         const currentDocObj = documents.find(d => d.id === currentActiveDocumentId);
         if (currentDocObj && collaborativeEditor.innerHTML !== currentDocObj.htmlContent) {
@@ -797,11 +842,11 @@ function handleDeleteDocument() {
     if (!currentActiveDocumentId) {
         logStatus("No document selected to delete.", true); return;
     }
-    const docToDelete = documents.find(d => d.id === currentActiveDocumentId);
-    if (!docToDelete) {
+    const docToDelete = documents.find(d => d.id === currentActiveDocumentId); 
+    if (!docToDelete) { 
         logStatus("Selected document not found for deletion.", true); return;
     }
-    if (!confirm(`Are you sure you want to delete "${docToDelete.name}"? This cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to delete "${docToDelete.name}"? This cannot be undone.`)) { 
         return;
     }
 
@@ -821,7 +866,7 @@ function handleDeleteDocument() {
         } else {
             collaborativeEditor.innerHTML = '<p>No documents available. The host can create one.</p>';
             collaborativeEditor.contentEditable = "false";
-            renderDocumentList(); // Clear list
+            renderDocumentList(); 
         }
     }
     if (roomApi && roomApi.getPeers().length > 0 && deletedDocId) showNotification('documentsSection');
@@ -834,7 +879,7 @@ async function joinRoomAndSetup() {
         return;
     }
 
-    const roomPassword = roomPasswordInput.value; // Do not trim password
+    const roomPassword = roomPasswordInput.value; 
     if (!roomPassword) {
         logStatus("Workspace password is required.", true);
         createPartyBtn.disabled = false;
@@ -849,17 +894,16 @@ async function joinRoomAndSetup() {
 
     let roomIdToJoin = roomIdInput.value.trim();
 
-    if (isHost) { // Current intent is to create/host
-        if (!roomIdToJoin) { // If no room ID provided by user for creation
+    if (isHost) { 
+        if (!roomIdToJoin) { 
             if (importedWorkspaceState && importedWorkspaceState.roomId) {
-                roomIdToJoin = importedWorkspaceState.roomId; // Use imported room ID if available
+                roomIdToJoin = importedWorkspaceState.roomId; 
             } else {
-                roomIdToJoin = generateMemorableRoomCode(); // Otherwise, generate a new one
+                roomIdToJoin = generateMemorableRoomCode(); 
             }
         }
-        // If roomIdToJoin was provided by user, it will be used for creation.
-        roomIdInput.value = roomIdToJoin; // Ensure it's displayed
-    } else { // Current intent is to join
+        roomIdInput.value = roomIdToJoin; 
+    } else { 
         if (!roomIdToJoin) {
             logStatus("Room Code is required to join a workspace.", true);
             createPartyBtn.disabled = false;
@@ -911,7 +955,7 @@ async function joinRoomAndSetup() {
         [sendDeleteDocument, onDeleteDocument] = roomApi.makeAction('delDoc');
         [sendDocumentContentUpdate, onDocumentContentUpdate] = roomApi.makeAction('docUpd');
 
-        if (importedWorkspaceState && isHost) { // Apply imported state only if this client is becoming the host
+        if (importedWorkspaceState && isHost) { 
             chatHistory = importedWorkspaceState.chatHistory || [];
             whiteboardHistory = importedWorkspaceState.whiteboardHistory || [];
             kanbanData = importedWorkspaceState.kanbanData || { columns: [] };
@@ -924,14 +968,13 @@ async function joinRoomAndSetup() {
                 currentActiveDocumentId = documents[0].id;
             }
             logStatus("Imported workspace state applied for hosting.");
-            importedWorkspaceState = null; // Clear after applying
-        } else if (isHost && documents.length === 0) { // If hosting a new room without import, create default doc
+            importedWorkspaceState = null; 
+        } else if (isHost && documents.length === 0) { 
             const defaultDocId = `doc-${Date.now()}`;
             documents = [{ id: defaultDocId, name: 'Shared Notes', htmlContent: '<p>Welcome to the shared document!</p>' }];
             currentActiveDocumentId = defaultDocId;
         }
-        // If joining (isHost=false), chatHistory, whiteboardHistory, etc., will be populated by host via onChatHistory, onInitialWhiteboard etc.
-
+        
         chatArea.innerHTML = '';
         chatHistory.forEach(msg => displayMessage({ ...msg, isHistorical: true }, msg.senderPeerId === localGeneratedPeerId, msg.isSystem));
 
@@ -1050,10 +1093,13 @@ async function joinRoomAndSetup() {
             if (localVideoCallStream && roomApi.addStream) {
                 roomApi.addStream(localVideoCallStream, joinedPeerId, { streamType: 'videochat' });
             }
+            if (localAudioStream && roomApi.addStream) {
+                roomApi.addStream(localAudioStream, joinedPeerId, { streamType: 'audiochat' });
+            }
             if (localScreenShareStream && roomApi.addStream) {
                 roomApi.addStream(localScreenShareStream, joinedPeerId, { streamType: 'screenshare' });
             }
-            if (isHost && sendInitialDocuments) { // Ensure host sends full doc state to new peers
+            if (isHost && sendInitialDocuments) { 
                 sendInitialDocuments({ docs: documents, activeId: currentActiveDocumentId }, joinedPeerId);
             }
         });
@@ -1069,12 +1115,19 @@ async function joinRoomAndSetup() {
                 peerVideoElements[leftPeerId].wrapper.remove();
                 delete peerVideoElements[leftPeerId];
             }
+            if (peerAudios[leftPeerId]) {
+                peerAudios[leftPeerId].pause();
+                peerAudios[leftPeerId].srcObject = null;
+                delete peerAudios[leftPeerId];
+            }
         });
         roomApi.onPeerStream((stream, peerId, metadata) => {
             if (metadata && metadata.streamType) {
                 const streamType = metadata.streamType;
                 if (streamType === 'videochat') {
                     handleIncomingVideoChatStream(stream, peerId);
+                } else if (streamType === 'audiochat') {
+                    handleIncomingAudioChatStream(stream, peerId);
                 } else if (streamType === 'screenshare') {
                     displayRemoteScreenShareStream(stream, peerId);
                 } else {
@@ -1093,6 +1146,7 @@ async function joinRoomAndSetup() {
 
         startShareBtn.disabled = false; startShareBtn.title = "Start sharing your screen"; stopShareBtn.disabled = true;
         startVideoCallBtn.disabled = false; stopVideoCallBtn.disabled = true;
+        startAudioCallBtn.disabled = false; stopAudioCallBtn.disabled = true; audioChatStatus.classList.add('hidden');
 
         if (sendNickname) await sendNickname({ nickname: localNickname, initialJoin: true, isHost: isHost }, Object.keys(roomApi.getPeers()).filter(p => p !== localGeneratedPeerId));
         updateUserList();
@@ -1119,6 +1173,7 @@ async function leaveRoomAndCleanup() {
     logStatus("Leaving workspace...");
     if (localScreenShareStream) stopScreenSharing(false);
     if (localVideoCallStream) stopVideoCall(false);
+    if (localAudioStream) stopAudioCall(false);
 
     if (roomApi) { try { await roomApi.leave(); logStatus("Left workspace successfully."); } catch (e) { console.warn("Error leaving room:", e); } }
     roomApi = null;
@@ -1159,6 +1214,20 @@ function resetToSetupState() {
     remoteVideoChatContainer.innerHTML = '';
     peerVideoElements = {};
 
+    startAudioCallBtn.disabled = true; stopAudioCallBtn.disabled = true;
+    audioChatStatus.classList.add('hidden');
+    if (localAudioStream) {
+        localAudioStream.getTracks().forEach(track => track.stop());
+        localAudioStream = null;
+    }
+    Object.values(peerAudios).forEach(audioEl => {
+        if (audioEl) {
+            audioEl.pause();
+            audioEl.srcObject = null;
+        }
+    });
+    peerAudios = {};
+
     chatArea.innerHTML = ''; userListUl.innerHTML = ''; userCountSpan.textContent = '0';
     messageInput.value = '';
     logStatus('Enter nickname, workspace code, and password. Create, join, or import a workspace.');
@@ -1173,8 +1242,6 @@ function resetToSetupState() {
     if (defaultSection) defaultSection.classList.remove('hidden');
     currentActiveSection = 'chatSection';
 
-    // Reset local data only if not planning to re-host immediately
-    // For simplicity, we'll reset them here. Re-hosting imported data will repopulate.
     whiteboardHistory = [];
     kanbanData = { columns: [] };
     chatHistory = [];
@@ -1188,7 +1255,6 @@ function resetToSetupState() {
 
     isHost = false;
     currentRoomId = '';
-    // importedWorkspaceState is preserved until explicitly used or a new import happens
 
     if (wbCtx && whiteboardCanvas.offsetParent) applyClearCommandLocal({ type: 'clear' });
     if (kanbanBoard) kanbanBoard.innerHTML = '';
@@ -1196,8 +1262,7 @@ function resetToSetupState() {
 
 createPartyBtn.addEventListener('click', () => {
     isHost = true;
-    // roomIdInput.value = ''; // User might want to create a specific room ID
-    documents = []; // Fresh start for documents if creating new
+    documents = []; 
     currentActiveDocumentId = null;
     joinRoomAndSetup();
 });
@@ -1207,8 +1272,6 @@ joinLeaveRoomBtn.addEventListener('click', () => {
         leaveRoomAndCleanup();
     } else {
         isHost = false;
-        // documents = []; // Don't clear local data if just attempting to join
-        // currentActiveDocumentId = null;
         joinRoomAndSetup();
     }
 });
@@ -1296,6 +1359,75 @@ async function stopVideoCall(updateButtons = true) {
 }
 stopVideoCallBtn.addEventListener('click', () => stopVideoCall(true));
 
+async function startAudioCall() {
+    if (!roomApi) { logStatus("Not in a room to start audio call.", true); return; }
+    try {
+        if (!navigator.mediaDevices?.getUserMedia) { 
+            logStatus("Audio capture not supported by your browser. Please try a different browser or update your current one.", true); 
+            return; 
+        }
+        if (localAudioStream) await stopAudioCall(true); 
+
+        logStatus("Requesting microphone access...");
+        localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        
+        logStatus("Microphone access granted. Starting audio call...");
+
+        await roomApi.addStream(localAudioStream, null, { streamType: 'audiochat' });
+
+        startAudioCallBtn.disabled = true;
+        stopAudioCallBtn.disabled = false;
+        audioChatStatus.textContent = "Audio call active. You are transmitting audio.";
+        audioChatStatus.classList.remove('hidden');
+        
+        localAudioStream.getTracks().forEach(track => {
+            track.onended = () => stopAudioCall(true); 
+        });
+
+    } catch (err) {
+        console.error("Error starting audio call:", err);
+        let userMessage = `Error starting audio call: ${err.message}`;
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            userMessage = "Microphone permission denied. Please check your browser's site settings (usually a lock icon in the address bar) and allow microphone access for this page. You might need to refresh the page after changing permissions.";
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            userMessage = "No microphone found. Please ensure a microphone is connected, enabled in your system settings, and not in use by another application.";
+        } else if (err.name === 'SecurityError') {
+             userMessage = "Microphone access denied due to security settings. This page might need to be served over HTTPS (secure connection), or your browser's security policy is preventing access.";
+        } else if (err.name === 'AbortError') {
+            userMessage = "Microphone request was aborted. This can happen if another device request was made too quickly or there was a hardware error.";
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+            userMessage = "Could not read from the microphone. It might be in use by another application, or there could be a hardware/driver issue. Try closing other apps that might use the mic, or restarting your browser/computer.";
+        }
+        
+        logStatus(userMessage, true);
+        if (localAudioStream) { localAudioStream.getTracks().forEach(track => track.stop()); localAudioStream = null; }
+        if (roomApi) { startAudioCallBtn.disabled = false; stopAudioCallBtn.disabled = true; }
+        audioChatStatus.classList.add('hidden');
+    }
+}
+
+async function stopAudioCall(updateButtons = true) {
+    logStatus("Stopping audio call...");
+    if (localAudioStream) {
+        if (roomApi?.removeStream) {
+            try { await roomApi.removeStream(localAudioStream, null, { streamType: 'audiochat' }); }
+            catch (e) { console.error("Exception calling roomApi.removeStream for audio call:", e); }
+        }
+        localAudioStream.getTracks().forEach(track => { track.onended = null; track.stop(); });
+        localAudioStream = null;
+    }
+
+    if (updateButtons && roomApi) {
+        startAudioCallBtn.disabled = false;
+        stopAudioCallBtn.disabled = true;
+    }
+    audioChatStatus.classList.add('hidden');
+    logStatus("Audio call stopped.");
+}
+startAudioCallBtn.addEventListener('click', startAudioCall);
+stopAudioCallBtn.addEventListener('click', () => stopAudioCall(true));
+
+
 sendMessageBtn.addEventListener('click', () => {
     const messageText = messageInput.value.trim(); if (!messageText || !roomApi) return;
     const timestamp = Date.now();
@@ -1323,13 +1455,20 @@ copyRoomCodeBtn.addEventListener('click', () => {
 });
 
 window.addEventListener('beforeunload', async () => {
+    // No specific cleanup needed here that isn't handled by browser closing connections
+    // or leaveRoomAndCleanup for explicit actions.
 });
 const savedNickname = localStorage.getItem('viewPartyNickname');
 if (savedNickname) nicknameInput.value = savedNickname;
 nicknameInput.addEventListener('input', () => localStorage.setItem('viewPartyNickname', nicknameInput.value.trim()));
 
 if (!navigator.mediaDevices?.getDisplayMedia) { startShareBtn.title = "Screen sharing not supported by your browser."; startShareBtn.disabled = true; }
-if (!navigator.mediaDevices?.getUserMedia) { startVideoCallBtn.title = "Video/Audio capture not supported by yourbrowser."; startVideoCallBtn.disabled = true; }
+if (!navigator.mediaDevices?.getUserMedia) { 
+    startVideoCallBtn.title = "Video/Audio capture not supported by your browser."; 
+    startVideoCallBtn.disabled = true; 
+    startAudioCallBtn.title = "Audio capture not supported by your browser.";
+    startAudioCallBtn.disabled = true;
+}
 
 resetToSetupState();
 populateEmojiPicker();

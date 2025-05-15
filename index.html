@@ -267,7 +267,8 @@ body {
   margin-right: var(--space-xs);
 }
 
-#headerStatusMessage.status-message-bar {
+#headerStatusMessage.status-message-bar,
+#audioChatStatus.status-message-bar {
   padding: var(--space-xs) var(--space-sm);
   background-color: var(--info-bg);
   border-left: 2px solid var(--info-border);
@@ -298,7 +299,8 @@ body {
 #screenShareSection.content-section,
 #whiteboardSection.content-section,
 #kanbanSection.content-section,
-#documentsSection.content-section {
+#documentsSection.content-section,
+#audioChatSection.content-section {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -330,7 +332,8 @@ body {
 }
 
 .section-pane > .sharing-controls,
-.section-pane > .video-chat-controls {
+.section-pane > .video-chat-controls,
+.section-pane > .audio-chat-controls {
   margin-bottom: 0;
 }
 
@@ -405,9 +408,8 @@ h3 {
   cursor: crosshair;
   background-color: #FFFFFF;
   max-width: 100%;
-  aspect-ratio: 16/9; /* This ensures the display box maintains 16:9 */
-  /* The width & height attributes on the canvas tag set the drawing buffer size */
-  display: block; /* Often good for canvas elements to prevent extra space */
+  aspect-ratio: 16/9; 
+  display: block; 
 }
 
 .whiteboard-controls input[type="color"] {
@@ -1260,6 +1262,25 @@ button:disabled {
   color: var(--accent-color);
 }
 
+.download-links {
+  text-align: center;
+  padding: var(--space-md) 0;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+}
+
+.download-links a {
+  color: var(--accent-color);
+  text-decoration: none;
+  margin: 0 var(--space-sm);
+}
+
+.download-links a:hover {
+  text-decoration: underline;
+  color: var(--accent-hover);
+}
+
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -1411,25 +1432,50 @@ button:disabled {
   .app-wrapper > *:not(.main-app-content),
   .main-app-content > *:not(#documentsSection),
   #documentsSection > *:not(#collaborativeEditor):not(h2),
-  .sidebar-navigation, .app-header,
-  .document-formatting-controls, .document-management-bar,
-  .app-header h1 label.theme-switch, .header-context-area {
+  .sidebar-navigation,
+  .app-header,
+  .document-formatting-controls,
+  .document-management-bar,
+  .app-header h1 label.theme-switch, 
+  .header-context-area, 
+  .download-links,
+  script /* Hide ALL script tags during print */
+  {
     display: none !important;
   }
-  .main-app-content {
-    padding: 0.5in !important;
-  }
-  #documentsSection {
-    display: block !important;
+
+  .container, .app-wrapper {
+    display: block !important; 
     height: auto !important;
     overflow: visible !important;
   }
-  #documentsSection h2 {
+
+  .main-app-content {
+    padding: 0.5in !important;
+    width: 100% !important; 
+    height: auto !important;
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+
+  #documentsSection {
+    display: block !important; 
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important; 
+  }
+
+  #documentsSection > h2 { 
+    display: block !important; 
     text-align: center;
     margin-bottom: 20px;
     border-bottom: none !important;
     font-size: 1.5rem;
+    color: black !important; 
   }
+
   #collaborativeEditor {
     border: none !important;
     box-shadow: none !important;
@@ -1441,14 +1487,29 @@ button:disabled {
     padding: 0 !important;
     background-color: white !important;
     color: black !important;
+    font-size: 12pt; 
+    line-height: 1.4;
   }
+  
+  #collaborativeEditor *, #collaborativeEditor *::before, #collaborativeEditor *::after { /* Ensure all children also get print colors */
+    color: black !important;
+    background-color: transparent !important; /* Or white if specific elements need it */
+  }
+
+
   a {
     text-decoration: underline !important;
     color: #0066cc !important;
   }
-  a[href^="/"]:after, a[href^="http"]:after, a[href^="https"]:after {
+  
+  a[href^="http"]:after, a[href^="https"]:after {
     content: " (" attr(href) ")";
     font-size: 0.8em;
+    font-weight: normal;
+    color: #333;
+  }
+  a[href^="#"]:after, a[href^="javascript:"]:after {
+    content: "" !important;
   }
 }
 </style>
@@ -1495,6 +1556,10 @@ button:disabled {
              <button class="sidebar-button" data-section="videoChatSection">
                 <span class="icon">📹</span><span>Video Chat</span>
                 <span class="notification-dot hidden" data-notification-for="videoChatSection"></span>
+            </button>
+            <button class="sidebar-button" data-section="audioChatSection">
+                <span class="icon">🎙️</span><span>Audio Chat</span>
+                <span class="notification-dot hidden" data-notification-for="audioChatSection"></span>
             </button>
             <button class="sidebar-button" data-section="screenShareSection">
                 <span class="icon">📺</span><span>Screen Share</span>
@@ -1562,6 +1627,17 @@ button:disabled {
                     </div>
                 </div>
             </div>
+            
+            <div id="audioChatSection" class="content-section hidden">
+                <h2>Audio Chat</h2>
+                <div class="audio-chat-controls button-group">
+                    <button id="startAudioCallBtn">Start Audio Call</button>
+                    <button id="stopAudioCallBtn" disabled>Stop Audio Call</button>
+                </div>
+                <div id="audioChatStatus" class="status-message-bar hidden">
+                    Audio call active. You are transmitting audio.
+                </div>
+            </div>
 
             <div id="screenShareSection" class="content-section hidden">
                 <h2>Shared Content (Screen)</h2>
@@ -1611,8 +1687,7 @@ button:disabled {
                     <button id="docUnderlineBtn" title="Underline"><u>U</u></button>
                     <button id="docUlBtn" title="Unordered List">UL</button>
                     <button id="docOlBtn" title="Ordered List">OL</button>
-                    <button id="downloadTxtBtn">Download .txt</button>
-                    <button id="downloadPdfBtn">Download .pdf (Print)</button>
+                    <button id="downloadTxtBtn">Download as text</button>
                 </div>
                 <div id="collaborativeEditor" contenteditable="true" spellcheck="false">
                     
@@ -1621,7 +1696,6 @@ button:disabled {
         </main>
     </div>
 </div>
-
 <script type="module" src="engine.js"></script>
 </body>
 </html>
