@@ -9,7 +9,7 @@ All data is sent only between clients through encrypted WebRTC channels. There i
 
 The tools included are chat with file sending, collaboarative document editing, a kanban board, screen sharing, video calling, audio chat, and a shared whiteboard for drawing ideas.
 
-This is the initial public release, happy to check out some PRs
+If this is something you would like to be a part of, please send a PR.
 
 Usage: You can use https://peersuite.space online, download the files and run them yourself, or grab an executable from releases. (Note, I am still learning electron, discovered today (5/13) that you can't add a kanban card in the executable versions) For full featureset until I fix this, use the website.
 
