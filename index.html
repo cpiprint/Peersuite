@@ -267,7 +267,7 @@ body {
   margin-right: var(--space-xs);
 }
 
-#headerStatusMessage.status-message-bar,
+#status, /* Renamed from #headerStatusMessage to match JS */
 #audioChatStatus.status-message-bar {
   padding: var(--space-xs) var(--space-sm);
   background-color: var(--info-bg);
@@ -280,6 +280,12 @@ body {
   transition: opacity var(--transition-normal), background-color var(--transition-normal);
   font-size: 0.85em;
 }
+#status { /* Specific styles for the initial status div */
+    margin: var(--space-md) auto;
+    max-width: 600px;
+    text-align: center;
+}
+
 
 .setup-controls-container {
   padding: var(--space-lg);
@@ -291,7 +297,7 @@ body {
 }
 
 .content-section {
-  
+  /* Basic styling, active state handled by JS */
 }
 
 #chatSection.content-section,
@@ -305,7 +311,7 @@ body {
   flex-direction: column;
   gap: var(--space-md);
   flex-grow: 1;
-  min-height: 0;
+  min-height: 0; /* Important for flex children to not overflow */
 }
 
 .section-pane {
@@ -314,11 +320,11 @@ body {
   border-radius: var(--radius-md);
   box-shadow: none; 
   width: 100%;
-  flex: 1;
+  flex: 1; /* Grow to fill available space */
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  min-height: 0;
+  min-height: 0; /* Again, for flex children */
   border: 1px solid var(--border-color);
 }
 
@@ -328,33 +334,36 @@ body {
   box-shadow: none;
   padding: 0;
   border-radius: 0;
-  margin-bottom: 0;
+  margin-bottom: 0; /* Removed default button group margin */
 }
 
 .section-pane > .sharing-controls,
 .section-pane > .video-chat-controls,
 .section-pane > .audio-chat-controls {
-  margin-bottom: 0;
+  margin-bottom: 0; /* Removed default button group margin */
 }
+
 
 .section-pane > #whiteboardCanvas,
-.section-pane > #videoChatContainer,
-.section-pane > #remoteVideosContainer,
+.section-pane > #videoChatContainer, /* This is a div, not canvas */
+.section-pane > #remoteVideosContainer, /* This is a div, not canvas */
 .section-pane > #kanbanBoard {
   flex-grow: 1;
-  min-height: 0;
+  min-height: 0; /* Allow shrinking if needed */
 }
 
+
 .section-pane > #kanbanBoard {
-  background-color: var(--bg-primary);
+  background-color: var(--bg-primary); /* Or var(--bg-card) if preferred */
   width: 100%;
   box-shadow: none;
   border: 1px solid var(--border-color);
 }
 
+
 h2 {
   font-size: 1.5rem; 
-  margin-bottom: 0;
+  margin-bottom: 0; /* Let gap handle spacing */
   padding-bottom: var(--space-sm);
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
@@ -370,8 +379,8 @@ h3 {
   display: grid;
   grid-template-columns: 2.5fr 1fr; 
   gap: var(--space-md);
-  flex: 1;
-  min-height: 0;
+  flex: 1; /* Grow to fill space */
+  min-height: 0; /* For scrollability */
 }
 
 #chatSection.content-section .chat-main {
@@ -381,16 +390,16 @@ h3 {
   padding: var(--space-md);
   border-radius: var(--radius-md);
   box-shadow: none; 
-  overflow: hidden;
+  overflow: hidden; /* Let #chatArea scroll */
   flex-grow: 1;
   border: 1px solid var(--border-color);
 }
 
 #chatArea {
-  height: auto;
+  height: auto; /* Let flex grow */
   flex-grow: 1;
   overflow-y: auto;
-  padding-right: var(--space-sm);
+  padding-right: var(--space-sm); /* For scrollbar */
 }
 
 #chatSection.content-section .user-list-sidebar {
@@ -398,73 +407,124 @@ h3 {
   padding: var(--space-md);
   border-radius: var(--radius-md);
   box-shadow: none; 
-  height: fit-content;
+  height: fit-content; /* Don't let it grow unnecessarily */
   border: 1px solid var(--border-color);
 }
+
 
 #whiteboardCanvas {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   cursor: crosshair;
-  background-color: #FFFFFF;
+  background-color: #FFFFFF; /* Default, JS might override for dark theme redraw */
   max-width: 100%;
-  aspect-ratio: 16/9; 
+  /* aspect-ratio: 16/9;  Let flexbox and parent height determine this */
   display: block; 
+  width: 100%; /* Fill available width */
+  height: 100%; /* Fill available height from parent .section-pane */
 }
+
+
+.whiteboard-controls.button-group { 
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.wb-tool-palette {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  background-color: var(--bg-card);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  margin-right: var(--space-sm); /* Space before next control */
+}
+
+.wb-tool-btn {
+  background-color: transparent;
+  border: 1px solid transparent; 
+  color: var(--text-primary);
+  padding: var(--space-sm);
+  font-size: 1.1rem;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  line-height: 1; 
+}
+
+.wb-tool-btn:hover {
+  background-color: var(--user-hover);
+  border-color: var(--border-color);
+}
+
+.wb-tool-btn.active {
+  background-color: var(--accent-color);
+  color: white;
+  border-color: var(--accent-color);
+}
+.wb-tool-btn.active:hover {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+
+#wbLineWidthValue {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+}
+#wbZoomLevelDisplay {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  border-radius: var(--radius-sm);
+  line-height: 1.5; 
+  height: 34px; /* Match button height */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 
 .whiteboard-controls input[type="color"] {
-  padding: 0;
-  height: 34px;
-  width: 40px;
+  padding: 0; /* Remove default padding */
+  height: 34px; /* Match other controls */
+  width: 40px; /* Decent size for color picker */
   border-radius: var(--radius-sm);
-  margin-bottom: 0;
+  margin-bottom: 0; /* Override default input margin */
 }
-
 .whiteboard-controls input[type="range"] {
   flex-grow: 1;
   max-width: 150px;
-  margin-bottom: 0;
-  height: 6px;
-  background-color: var(--border-color);
+  margin-bottom: 0; /* Override default input margin */
+  height: 6px; /* Visual height of the track */
+  background-color: var(--border-color); /* Track color */
   border-radius: 3px;
 }
-
 .whiteboard-controls button,
 .whiteboard-controls span {
-  margin-bottom: 0;
+  margin-bottom: 0; /* Ensure no extra margin if they were inputs */
 }
 
-#wbModeToggle {
-  cursor: pointer;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  user-select: none;
-  background-color: var(--bg-card);
-  color: var(--text-primary);
-  line-height: 1.5;
-  font-size: 0.85em;
-}
-
-#wbModeToggle:hover {
-  background-color: var(--user-hover);
-}
 
 .kanban-controls input[type="text"] {
-  margin-bottom: 0;
-  height: 34px;
+  margin-bottom: 0; /* Override default */
+  height: 34px; /* Match button height */
   padding: var(--space-sm) var(--space-md);
 }
+
 
 .kanban-board {
   display: flex;
   gap: var(--space-md);
-  overflow-x: auto;
-  padding-bottom: var(--space-md);
-  min-height: 400px;
+  overflow-x: auto; /* Horizontal scroll for columns */
+  padding-bottom: var(--space-md); /* Space for scrollbar */
+  min-height: 400px; /* Ensure it has some height */
   border-radius: var(--radius-sm);
   padding: var(--space-md);
-  flex-grow: 1;
+  flex-grow: 1; /* Take remaining space */
 }
 
 .kanban-card.dragging {
@@ -488,21 +548,19 @@ h3 {
   padding: var(--space-md);
   border-radius: var(--radius-sm);
   box-shadow: none;
-  max-width: 320px;
+  max-width: 320px; /* Or adjust as needed */
   width: 100%;
   border: 1px solid var(--border-color);
 }
-
 #localVideoContainer h3 {
   margin-top: 0;
   margin-bottom: var(--space-sm);
   font-size: 1rem;
 }
-
 #localVideo {
   width: 100%;
   border-radius: var(--radius-sm);
-  background-color: #111;
+  background-color: #111; /* Placeholder background */
   aspect-ratio: 16/9;
   display: block;
 }
@@ -511,7 +569,7 @@ h3 {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: var(--space-md);
-  flex-grow: 1;
+  flex-grow: 1; /* Allow grid to take space */
 }
 
 .remote-video-wrapper {
@@ -523,7 +581,6 @@ h3 {
   flex-direction: column;
   border: 1px solid var(--border-color);
 }
-
 .remote-video-wrapper p {
   margin-top: 0;
   margin-bottom: var(--space-sm);
@@ -532,16 +589,16 @@ h3 {
   font-weight: 500;
   text-align: center;
 }
-
 .remote-video-wrapper video {
   width: 100%;
   border-radius: var(--radius-sm);
   background-color: #111;
   aspect-ratio: 16/9;
-  flex-grow: 1;
+  flex-grow: 1; /* Video should fill its wrapper space */
 }
 
-#remoteVideosContainer {
+
+#remoteVideosContainer { /* For Screen Share */
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--space-md);
@@ -555,23 +612,20 @@ h3 {
   background-color: var(--bg-secondary);
   border-radius: var(--radius-sm);
   box-shadow: none;
-  flex-wrap: wrap;
+  flex-wrap: wrap; /* Allow wrapping on small screens */
   border: 1px solid var(--border-color);
 }
-
 .document-management-bar h3 {
   margin: 0;
   font-size: 0.95rem;
   color: var(--text-primary);
 }
-
 #documentList {
   display: flex;
   gap: var(--space-sm);
-  flex-wrap: wrap;
-  padding-left: var(--space-md);
+  flex-wrap: wrap; /* Allow wrapping */
+  padding-left: var(--space-md); /* Space after "Documents:" */
 }
-
 .document-list-item {
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
@@ -581,36 +635,27 @@ h3 {
   font-size: 0.85rem;
   transition: background-color var(--transition-fast), color var(--transition-fast);
 }
-
 .document-list-item:hover {
   background-color: var(--user-hover);
 }
-
 .document-list-item.active {
   background-color: var(--accent-color);
   color: white;
   border-color: var(--accent-color);
   font-weight: 600;
 }
-
 .document-actions {
   display: flex;
   gap: var(--space-sm);
-  margin-left: auto;
+  margin-left: auto; /* Push to the right */
 }
-
 .document-actions button {
   padding: var(--space-xs) var(--space-sm);
   font-size: 0.85rem;
 }
+#deleteDocBtn { background-color: var(--danger-color); }
+#deleteDocBtn:hover { background-color: var(--danger-hover); }
 
-#deleteDocBtn {
-  background-color: var(--danger-color);
-}
-
-#deleteDocBtn:hover {
-  background-color: var(--danger-hover);
-}
 
 .document-formatting-controls {
   background-color: var(--bg-secondary);
@@ -621,52 +666,37 @@ h3 {
   gap: var(--space-sm);
   border: 1px solid var(--border-color);
 }
-
 .document-formatting-controls button {
   padding: var(--space-xs) var(--space-sm);
   font-size: 0.9rem;
-  margin-right: 2px;
+  margin-right: 2px; /* Slight separation */
 }
 
+
 #collaborativeEditor {
-  flex-grow: 1;
+  flex-grow: 1; /* Take available vertical space */
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: var(--space-lg);
-  overflow-y: auto;
-  min-height: 300px;
+  overflow-y: auto; /* Scroll content */
+  min-height: 300px; /* Ensure it's usable */
   color: var(--text-primary);
   line-height: 1.7;
-  outline: none;
+  outline: none; /* Remove default focus outline */
   box-shadow: none;
 }
-
 #collaborativeEditor:focus {
-  border-color: var(--accent-color);
+  border-color: var(--accent-color); /* Highlight on focus */
 }
-
-#collaborativeEditor p {
-  margin: 0 0 0.75em 0;
-}
-
+#collaborativeEditor p { margin: 0 0 0.75em 0; }
 #collaborativeEditor ul,
-#collaborativeEditor ol {
-  margin: 0 0 0.75em 2em;
-  padding-left: 0;
+#collaborativeEditor ol { margin: 0 0 0.75em 2em; padding-left: 0; }
+#collaborativeEditor li { margin-bottom: 0.25em; }
+#collaborativeEditor h1, #collaborativeEditor h2, #collaborativeEditor h3 {
+  margin-top: 1em; margin-bottom: 0.5em; line-height: 1.3;
 }
 
-#collaborativeEditor li {
-  margin-bottom: 0.25em;
-}
-
-#collaborativeEditor h1,
-#collaborativeEditor h2,
-#collaborativeEditor h3 {
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-  line-height: 1.3;
-}
 
 label {
   display: block;
@@ -686,24 +716,13 @@ input[type="file"] {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   font-size: 0.95rem;
-  background-color: var(--bg-secondary);
+  background-color: var(--bg-secondary); /* Consistent input bg */
   color: var(--text-primary);
   transition: all var(--transition-fast);
 }
-
-input[type="text"],
-input[type="password"] {
-  height: 34px; 
-}
-
-input[type="file"] {
-  padding: var(--space-xs);
-}
-
-input[type="text"],
-input[type="password"] {
-  width: 100%;
-}
+input[type="text"], input[type="password"] { height: 34px; } /* Consistent height */
+input[type="file"] { padding: var(--space-xs); } /* File input needs less padding */
+input[type="text"], input[type="password"] { width: 100%; } /* Full width for these */
 
 input[type="text"]:focus,
 input[type="password"]:focus,
@@ -711,26 +730,24 @@ input[type="color"]:focus,
 input[type="range"]:focus {
   outline: none;
   border-color: var(--accent-color);
-  box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15);
+  box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15); /* Subtle focus glow */
 }
-
 input[type="text"]::placeholder,
 input[type="password"]::placeholder {
   color: var(--text-secondary);
   opacity: 0.8;
 }
 
+
 .button-group {
   margin-bottom: var(--space-md);
   display: flex;
   gap: var(--space-sm);
-  flex-wrap: wrap;
-  align-items: center;
+  flex-wrap: wrap; /* Allow buttons to wrap */
+  align-items: center; /* Align items nicely */
 }
+.section-pane > .button-group { margin-bottom: 0; } /* Remove margin if directly in pane */
 
-.section-pane > .button-group {
-  margin-bottom: 0;
-}
 
 button {
   padding: 0.5rem 1rem; 
@@ -743,23 +760,20 @@ button {
   font-size: 0.9rem;
   transition: all var(--transition-fast);
   box-shadow: none; 
-  display: inline-flex;
+  display: inline-flex; /* For icon alignment if any */
   align-items: center;
   justify-content: center;
 }
-
 button:hover {
   background-color: var(--accent-hover);
   transform: none; 
   box-shadow: none;
 }
-
 button:active {
   transform: none;
   opacity: 0.9;
   box-shadow: none;
 }
-
 button:disabled {
   background-color: var(--border-color);
   cursor: not-allowed;
@@ -768,53 +782,45 @@ button:disabled {
   box-shadow: none;
 }
 
-.remoteVideoContainer {
+
+.remoteVideoContainer { /* For screen share items specifically */
   border: 1px solid var(--border-color);
   padding: var(--space-md);
   background: var(--bg-card);
   border-radius: var(--radius-sm);
   box-shadow: none; 
-  position: relative;
+  position: relative; /* For maximize button positioning */
   transition: none; 
 }
-
-.remoteVideoContainer:hover {
-  transform: none; 
-  box-shadow: none;
-}
-
-.remoteVideo {
+.remoteVideoContainer:hover { transform: none; box-shadow: none; }
+.remoteVideo { /* Screen share video element */
   width: 100%;
   border-radius: var(--radius-sm);
-  min-height: 200px;
-  background-color: #111;
+  min-height: 200px; /* Ensure it's visible */
+  background-color: #111; /* Placeholder */
   margin-bottom: var(--space-sm);
   display: block;
 }
-
-.remoteVideoContainer p {
+.remoteVideoContainer p { /* Nickname for screen share */
   margin: var(--space-sm) 0;
   font-size: 0.9em;
   color: var(--text-secondary);
 }
-
 .maximize-btn {
   position: absolute;
   top: var(--space-md);
   right: var(--space-md);
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0,0,0,0.5);
   color: white;
   border: none;
   padding: var(--space-xs) var(--space-sm);
   font-size: 0.75rem;
   border-radius: var(--radius-sm);
-  z-index: 10;
+  z-index: 10; /* Above video */
   box-shadow: none;
 }
+.maximize-btn:hover { background-color: rgba(0,0,0,0.7); }
 
-.maximize-btn:hover {
-  background-color: rgba(0, 0, 0, 0.7);
-}
 
 .message {
   margin-bottom: var(--space-md);
@@ -822,609 +828,148 @@ button:disabled {
   border-radius: var(--radius-sm);
   word-wrap: break-word;
   max-width: 85%;
-  position: relative;
+  position: relative; /* For potential future absolute elements inside */
   box-shadow: none; 
   animation: fadeIn 0.2s ease-out;
   border: 1px solid var(--border-color);
 }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+.message.self { background-color: var(--self-message); text-align: right; margin-left: auto; border-radius: var(--radius-sm); }
+.message.other { background-color: var(--other-message); margin-right: auto; border-radius: var(--radius-sm); }
+.message .sender { font-weight: 600; display: block; font-size: 0.85em; margin-bottom: var(--space-xs); color: var(--text-primary); }
+.message .timestamp { font-size: 0.75em; color: var(--text-secondary); margin-left: var(--space-sm); display: inline-block; }
+.system-message { font-style: italic; color: var(--system-text); text-align: center; margin: var(--space-md) 0; padding: var(--space-sm) var(--space-md); background-color: var(--system-message); border-radius: var(--radius-md); font-size: 0.85em; max-width: none; animation: fadeInSystem 0.3s ease-out; border: 1px solid var(--border-color); }
+@keyframes fadeInSystem { from { opacity: 0; } to { opacity: 1; } }
 
-.message.self {
-  background-color: var(--self-message);
-  text-align: right;
-  margin-left: auto;
-  border-radius: var(--radius-sm);
-}
+.message.pm { border-left: 2px solid var(--pm-border); }
+.message.pm.self { border-left: none; border-right: 2px solid var(--pm-border); background-color: var(--pm-self); }
+.message.pm.other { background-color: var(--pm-other); }
+.message .pm-info { font-weight: 700; font-size: 0.8em; color: var(--text-secondary); display: block; margin-bottom: var(--space-xs); }
+.message.file-message { background-color: var(--file-message-bg); }
+.message.file-message a { color: var(--accent-color); text-decoration: underline; font-weight: 500; }
 
-.message.other {
-  background-color: var(--other-message);
-  margin-right: auto;
-  border-radius: var(--radius-sm);
-}
-
-.message .sender {
-  font-weight: 600;
-  display: block;
-  font-size: 0.85em;
-  margin-bottom: var(--space-xs);
-  color: var(--text-primary);
-}
-
-.message .timestamp {
-  font-size: 0.75em;
-  color: var(--text-secondary);
-  margin-left: var(--space-sm);
-  display: inline-block;
-}
-
-.system-message {
-  font-style: italic;
-  color: var(--system-text);
-  text-align: center;
-  margin: var(--space-md) 0;
-  padding: var(--space-sm) var(--space-md);
-  background-color: var(--system-message);
-  border-radius: var(--radius-md);
-  font-size: 0.85em;
-  max-width: none;
-  animation: fadeInSystem 0.3s ease-out;
-  border: 1px solid var(--border-color);
-}
-
-@keyframes fadeInSystem {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.message.pm {
-  border-left: 2px solid var(--pm-border);
-}
-
-.message.pm.self {
-  border-left: none;
-  border-right: 2px solid var(--pm-border);
-  background-color: var(--pm-self);
-}
-
-.message.pm.other {
-  background-color: var(--pm-other);
-}
-
-.message .pm-info {
-  font-weight: 700;
-  font-size: 0.8em;
-  color: var(--text-secondary);
-  display: block;
-  margin-bottom: var(--space-xs);
-}
-
-.message.file-message {
-  background-color: var(--file-message-bg);
-}
-
-.message.file-message a {
-  color: var(--accent-color);
-  text-decoration: underline;
-  font-weight: 500;
-}
 
 #userList {
   list-style-type: none;
   padding: 0;
   margin: 0;
-  max-height: 300px;
+  max-height: 300px; /* Limit height and scroll */
   overflow-y: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background-color: var(--bg-card);
-  scrollbar-width: thin;
-  scrollbar-color: var(--text-secondary) transparent;
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: var(--text-secondary) transparent; /* Firefox */
 }
-
-#userList::-webkit-scrollbar {
-  width: 6px;
-}
-
-#userList::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-#userList::-webkit-scrollbar-thumb {
-  background-color: var(--text-secondary);
-  border-radius: 3px;
-}
-
-#userList li {
-  padding: var(--space-sm) var(--space-md);
-  border-bottom: 1px solid var(--border-color);
-  transition: background-color var(--transition-fast);
-  font-size: 0.9em;
-}
-
-#userList li:last-child {
-  border-bottom: none;
-}
-
-#userList li.peer-name {
-  cursor: pointer;
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-}
-
-#userList li.peer-name:hover {
-  background-color: var(--user-hover);
-}
-
-#userList li.peer-name::before {
-  content: "💬";
-  margin-right: var(--space-sm);
-  font-size: 0.9em;
-}
-
-.status-badge {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  background-color: #4caf50;
-  border-radius: 50%;
-  margin-right: var(--space-sm);
-}
-
-.chat-input-area {
-  display: flex;
-  gap: var(--space-sm);
-  margin-top: var(--space-md);
-  position: relative;
-}
-
-.chat-input-area input[type=text] {
-  flex-grow: 1;
-  margin-bottom: 0;
-  padding: var(--space-sm) var(--space-lg);
-  padding-right: 120px;
-  height: 36px;
-}
-
-.chat-input-area button {
-  flex-shrink: 0;
-  width: auto;
-  height: 36px;
-}
-
-.file-attach-icon, .emoji-icon {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  cursor: pointer;
-  font-size: 1.1rem;
-  color: var(--text-secondary);
-  transition: color var(--transition-fast);
-  user-select: none;
-}
-
-.emoji-icon {
-  right: calc(70px + var(--space-sm));
-}
-
-.file-attach-icon {
-  right: calc(70px + var(--space-sm) + 20px + var(--space-sm));
-}
-
-.file-attach-icon:hover, .emoji-icon:hover {
-  color: var(--accent-color);
-  transform: translateY(-50%);
-}
-
-.emoji-picker-popup {
-  position: absolute;
-  bottom: calc(100% + var(--space-sm));
-  right: 65px;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-md);
-  padding: var(--space-sm);
-  display: grid;
-  grid-template-columns: repeat(5, auto);
-  gap: var(--space-xs);
-  z-index: 100;
-  width: fit-content;
-  max-width: 250px;
-}
-
-.emoji-picker-popup span {
-  cursor: pointer;
-  padding: var(--space-xs);
-  text-align: center;
-  font-size: 1.25rem;
-  border-radius: var(--radius-sm);
-  transition: background-color var(--transition-fast);
-}
-
-.emoji-picker-popup span:hover {
-  background-color: var(--user-hover);
-}
-
-.kanban-column {
-  background-color: var(--bg-secondary);
-  border-radius: var(--radius-sm);
-  padding: var(--space-md);
-  width: 280px;
-  flex-shrink: 0;
-  box-shadow: none;
-  border: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-}
-
-.kanban-column h3 {
-  font-size: 1rem;
-  margin-bottom: var(--space-md);
-  padding-bottom: var(--space-sm);
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.delete-column-btn {
-  background: transparent;
-  color: var(--danger-color);
-  padding: var(--space-xs);
-  font-size: 0.85rem;
-  box-shadow: none;
-  opacity: 0.7; 
-}
-
-.delete-column-btn:hover {
-  color: var(--danger-hover);
-  background: transparent;
-  opacity: 1;
-}
-
-.kanban-cards {
-  min-height: 150px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  flex-grow: 1;
-  overflow-y: auto;
-  padding: var(--space-xs);
-}
-
-.kanban-card {
-  background-color: var(--bg-card);
-  padding: var(--space-md);
-  border-radius: var(--radius-sm);
-  box-shadow: none;
-  border: 1px solid var(--border-color);
-  cursor: grab;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.kanban-card:active {
-  cursor: grabbing;
-}
-
-.kanban-card p {
-  margin: 0;
-  font-size: 0.9rem;
-  word-break: break-word;
-  flex-grow: 1;
-}
-
-.delete-card-btn {
-  background: transparent;
-  color: var(--text-secondary);
-  padding: 0;
-  margin-left: var(--space-sm);
-  font-size: 0.85rem;
-  box-shadow: none;
-  line-height: 1;
-  opacity: 0.5;
-}
-
-.delete-card-btn:hover {
-  color: var(--danger-color);
-  background: transparent;
-  opacity: 1;
-}
-
-.kanban-column .add-card-btn {
-  margin-top: auto;
-  padding-top: var(--space-sm);
-  background-color: transparent;
-  color: var(--accent-color);
-  border: 1px dashed var(--accent-color);
-  font-weight: 500;
-  opacity: 0.8;
-  height: 32px;
-  margin-top: var(--space-md);
-}
-
-.kanban-column .add-card-btn:hover {
-  background-color: rgba(0, 120, 215, 0.1);
-  color: var(--accent-color);
-  border-style: solid;
-  opacity: 1;
-}
-
-.room-info-display p {
-  margin: var(--space-xs) 0;
-  font-size: 0.85em;
-  display: flex;
-  align-items: center;
-}
-
-.room-info-display strong {
-  color: var(--text-primary);
-}
-
-.copy-room-code-btn {
-  background: none;
-  border: none;
-  color: var(--accent-color);
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 0 var(--space-xs);
-  margin-left: var(--space-sm);
-  vertical-align: middle;
-  box-shadow: none;
-  transform: none;
-  line-height: 1;
-  transition: color var(--transition-fast);
-  opacity: 0.8;
-}
-
-.copy-room-code-btn:hover {
-  color: var(--accent-hover);
-  transform: none;
-  background: none;
-  box-shadow: none;
-  opacity: 1;
-}
-
-.copy-room-code-btn:active {
-  transform: none;
-  background: none;
-  box-shadow: none;
-  opacity: 0.7;
-}
-
-.theme-switch {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  user-select: none;
-}
-
-.theme-switch-track {
-  position: relative;
-  display: inline-block;
-  width: 40px; 
-  height: 20px; 
-  background-color: #ccc;
-  border-radius: 10px;
-  margin: 0 var(--space-sm);
-  transition: background-color var(--transition-normal);
-}
-
-.theme-switch-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px; 
-  height: 16px; 
-  background-color: white;
-  border-radius: 50%;
-  transition: transform var(--transition-normal);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
-.light-icon, .dark-icon {
-  font-size: 1rem; 
-}
-
-.theme-switch-checkbox {
-  display: none;
-}
-
-.theme-switch-checkbox:checked + .theme-switch-track {
-  background-color: var(--accent-color);
-}
-
-.theme-switch-checkbox:checked + .theme-switch-track .theme-switch-thumb {
-  transform: translateX(20px);
-}
-
-.hidden {
-  display: none !important;
-}
-
-.logo-dot {
-  color: var(--accent-color);
-}
-
-.download-links {
-  text-align: center;
-  padding: var(--space-md) 0;
-  font-size: 0.9em;
-  color: var(--text-secondary);
-}
-
-.download-links a {
-  color: var(--accent-color);
-  text-decoration: none;
-  margin: 0 var(--space-sm);
-}
-
-.download-links a:hover {
-  text-decoration: underline;
-  color: var(--accent-hover);
-}
+#userList::-webkit-scrollbar { width: 6px; }
+#userList::-webkit-scrollbar-track { background: transparent; }
+#userList::-webkit-scrollbar-thumb { background-color: var(--text-secondary); border-radius: 3px; }
+#userList li { padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--border-color); transition: background-color var(--transition-fast); font-size: 0.9em; }
+#userList li:last-child { border-bottom: none; }
+#userList li.peer-name { cursor: pointer; color: var(--text-primary); display: flex; align-items: center; }
+#userList li.peer-name:hover { background-color: var(--user-hover); }
+#userList li.peer-name::before { content: "💬"; margin-right: var(--space-sm); font-size: 0.9em; }
+.status-badge { display: inline-block; width: 6px; height: 6px; background-color: #4caf50; border-radius: 50%; margin-right: var(--space-sm); }
 
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
+.chat-input-area { display: flex; gap: var(--space-sm); margin-top: var(--space-md); position: relative; }
+.chat-input-area input[type=text] { flex-grow: 1; margin-bottom: 0; padding: var(--space-sm) var(--space-lg); padding-right: 120px; /* Space for icons+button */ height: 36px; }
+.chat-input-area button { flex-shrink: 0; width: auto; height: 36px; }
+.file-attach-icon, .emoji-icon { position: absolute; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 1.1rem; color: var(--text-secondary); transition: color var(--transition-fast); user-select: none; }
+.emoji-icon { right: calc(70px + var(--space-sm)); /* 70px for Send button approx width */ }
+.file-attach-icon { right: calc(70px + var(--space-sm) + 20px + var(--space-sm)); /* Further left */ }
+.file-attach-icon:hover, .emoji-icon:hover { color: var(--accent-color); transform: translateY(-50%); /* Keep Y transform */ }
+.emoji-picker-popup { position: absolute; bottom: calc(100% + var(--space-sm)); right: 65px; /* Adjust based on send button */ background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); box-shadow: var(--shadow-md); padding: var(--space-sm); display: grid; grid-template-columns: repeat(5, auto); gap: var(--space-xs); z-index: 100; width: fit-content; max-width: 250px; }
+.emoji-picker-popup span { cursor: pointer; padding: var(--space-xs); text-align: center; font-size: 1.25rem; border-radius: var(--radius-sm); transition: background-color var(--transition-fast); }
+.emoji-picker-popup span:hover { background-color: var(--user-hover); }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
 
-::-webkit-scrollbar-thumb {
-  background-color: var(--border-color);
-  border-radius: 4px;
-}
+.kanban-column { background-color: var(--bg-secondary); border-radius: var(--radius-sm); padding: var(--space-md); width: 280px; flex-shrink: 0; /* Prevent shrinking */ box-shadow: none; border: 1px solid var(--border-color); display: flex; flex-direction: column; }
+.kanban-column h3 { font-size: 1rem; margin-bottom: var(--space-md); padding-bottom: var(--space-sm); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+.delete-column-btn { background: transparent; color: var(--danger-color); padding: var(--space-xs); font-size: 0.85rem; box-shadow: none; opacity: 0.7; }
+.delete-column-btn:hover { color: var(--danger-hover); background: transparent; opacity: 1; }
+.kanban-cards { min-height: 150px; display: flex; flex-direction: column; gap: var(--space-md); flex-grow: 1; /* Fill column space */ overflow-y: auto; /* Scroll cards if too many */ padding: var(--space-xs); }
+.kanban-card { background-color: var(--bg-card); padding: var(--space-md); border-radius: var(--radius-sm); box-shadow: none; border: 1px solid var(--border-color); cursor: grab; display: flex; justify-content: space-between; align-items: flex-start; }
+.kanban-card:active { cursor: grabbing; }
+.kanban-card p { margin: 0; font-size: 0.9rem; word-break: break-word; flex-grow: 1; }
+.delete-card-btn { background: transparent; color: var(--text-secondary); padding: 0; margin-left: var(--space-sm); font-size: 0.85rem; box-shadow: none; line-height: 1; opacity: 0.5; }
+.delete-card-btn:hover { color: var(--danger-color); background: transparent; opacity: 1; }
+.kanban-column .add-card-btn { margin-top: auto; /* Push to bottom */ padding-top: var(--space-sm); background-color: transparent; color: var(--accent-color); border: 1px dashed var(--accent-color); font-weight: 500; opacity: 0.8; height: 32px; margin-top: var(--space-md); }
+.kanban-column .add-card-btn:hover { background-color: rgba(0,120,215,0.1); color: var(--accent-color); border-style: solid; opacity: 1; }
 
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--text-secondary);
-}
+
+.room-info-display p { margin: var(--space-xs) 0; font-size: 0.85em; display: flex; align-items: center; }
+.room-info-display strong { color: var(--text-primary); }
+.copy-room-code-btn { background: none; border: none; color: var(--accent-color); cursor: pointer; font-size: 1rem; padding: 0 var(--space-xs); margin-left: var(--space-sm); vertical-align: middle; box-shadow: none; transform: none; line-height: 1; transition: color var(--transition-fast); opacity: 0.8; }
+.copy-room-code-btn:hover { color: var(--accent-hover); transform: none; background: none; box-shadow: none; opacity: 1; }
+.copy-room-code-btn:active { transform: none; background: none; box-shadow: none; opacity: 0.7; }
+
+
+.theme-switch { display: flex; align-items: center; cursor: pointer; user-select: none; }
+.theme-switch-track { position: relative; display: inline-block; width: 40px; height: 20px; background-color: #ccc; border-radius: 10px; margin: 0 var(--space-sm); transition: background-color var(--transition-normal); }
+.theme-switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background-color: white; border-radius: 50%; transition: transform var(--transition-normal); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+.light-icon, .dark-icon { font-size: 1rem; }
+.theme-switch-checkbox { display: none; }
+.theme-switch-checkbox:checked + .theme-switch-track { background-color: var(--accent-color); }
+.theme-switch-checkbox:checked + .theme-switch-track .theme-switch-thumb { transform: translateX(20px); }
+
+
+.hidden { display: none !important; }
+.logo-dot { color: var(--accent-color); }
+
+
+.download-links { text-align: center; padding: var(--space-md) 0; font-size: 0.9em; color: var(--text-secondary); }
+.download-links a { color: var(--accent-color); text-decoration: none; margin: 0 var(--space-sm); }
+.download-links a:hover { text-decoration: underline; color: var(--accent-hover); }
+
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--text-secondary); }
+
 
 @media (max-width: 900px) {
-  :root {
-    --sidebar-width: 170px;
-  }
-  #chatSection.content-section .chat-section-content {
-    grid-template-columns: 1fr;
-  }
-  #chatSection.content-section .user-list-sidebar {
-    margin-top: var(--space-md);
-  }
-  .sidebar-button span:not(.icon):not(.notification-dot) {
-    font-size: 0.85em;
-  }
-  .remote-videos-grid {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  }
-  #localVideoContainer {
-    max-width: 280px;
-  }
+  :root { --sidebar-width: 170px; }
+  #chatSection.content-section .chat-section-content { grid-template-columns: 1fr; }
+  #chatSection.content-section .user-list-sidebar { margin-top: var(--space-md); }
+  .sidebar-button span:not(.icon):not(.notification-dot) { font-size: 0.85em; }
+  .remote-videos-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  #localVideoContainer { max-width: 280px; }
 }
-
 @media (max-width: 768px) {
-  .app-wrapper {
-    flex-direction: column;
-  }
-  .sidebar-navigation {
-    width: 100%;
-    height: auto;
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-    padding: var(--space-xs);
-  }
-  .sidebar-button {
-    flex-direction: column;
-    padding: var(--space-sm);
-    min-width: 70px;
-    font-size: 0.8em;
-  }
-  .sidebar-button .icon {
-    margin-right: 0;
-    margin-bottom: var(--space-xs);
-  }
-  .notification-dot {
-    top: var(--space-xs);
-    right: var(--space-xs);
-    transform: none;
-  }
-  .main-app-content {
-    padding: var(--space-sm);
-  }
-  .setup-controls-container {
-    padding: var(--space-md);
-  }
-  .remote-videos-grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  }
-  #localVideoContainer {
-    max-width: 220px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .document-formatting-controls {
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  .document-management-bar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .document-actions {
-    margin-left: 0;
-    margin-top: var(--space-sm);
-    width: 100%;
-    justify-content: space-around;
-  }
-  .header-context-area {
-    font-size: 0.8em;
-  }
+  .app-wrapper { flex-direction: column; }
+  .sidebar-navigation { width: 100%; height: auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; border-right: none; border-bottom: 1px solid var(--border-color); padding: var(--space-xs); }
+  .sidebar-button { flex-direction: column; padding: var(--space-sm); min-width: 70px; font-size: 0.8em; }
+  .sidebar-button .icon { margin-right: 0; margin-bottom: var(--space-xs); }
+  .notification-dot { top: var(--space-xs); right: var(--space-xs); transform: none; }
+  .main-app-content { padding: var(--space-sm); }
+  .setup-controls-container { padding: var(--space-md); }
+  .remote-videos-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  #localVideoContainer { max-width: 220px; margin-left: auto; margin-right: auto; }
+  .document-formatting-controls { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+  .document-management-bar { flex-direction: column; align-items: flex-start; }
+  .document-actions { margin-left: 0; margin-top: var(--space-sm); width: 100%; justify-content: space-around; }
+  .header-context-area { font-size: 0.8em; }
 }
-
 @media (max-width: 600px) {
-  .button-group {
+  .button-group:not(.whiteboard-controls):not(.document-formatting-controls) { /* Exclude specific groups that should remain row-based */
     flex-direction: column;
   }
-  .button-group button {
+  .button-group:not(.whiteboard-controls):not(.document-formatting-controls) button {
     width: 100%;
   }
-  .chat-input-area input[type=text] {
-    padding-right: 100px;
-  }
-  .emoji-icon {
-    right: calc(55px + var(--space-xs));
-  }
-  .file-attach-icon {
-    right: calc(55px + var(--space-xs) + 18px + var(--space-xs));
-  }
-  .kanban-board {
-    flex-direction: column;
-    align-items: stretch;
-    height: auto;
-    max-height: 60vh;
-  }
-  .kanban-column {
-    width: auto;
-  }
-  .remote-videos-grid {
-    grid-template-columns: 1fr;
-  }
-  #localVideoContainer {
-    max-width: 100%;
-  }
-  #headerRoomInfoDisplay.room-info-display {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-xs);
-  }
-  .room-info-separator {
-    display: none;
-  }
-  .app-header h1 {
-    font-size: 1.3rem;
-  }
+  .chat-input-area input[type=text] { padding-right: 100px; /* Adjust for smaller send button area */ }
+  .emoji-icon { right: calc(55px + var(--space-xs)); /* Adjust based on smaller send button */ }
+  .file-attach-icon { right: calc(55px + var(--space-xs) + 18px + var(--space-xs)); }
+  .kanban-board { flex-direction: column; align-items: stretch; height: auto; max-height: 60vh; }
+  .kanban-column { width: auto; /* Full width in column layout */ }
+  .remote-videos-grid { grid-template-columns: 1fr; /* Single column for smallest screens */ }
+  #localVideoContainer { max-width: 100%; }
+  #headerRoomInfoDisplay.room-info-display { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
+  .room-info-separator { display: none; }
+  .app-header h1 { font-size: 1.3rem; }
 }
 
 @media print {
@@ -1439,78 +984,17 @@ button:disabled {
   .app-header h1 label.theme-switch, 
   .header-context-area, 
   .download-links,
-  script /* Hide ALL script tags during print */
-  {
-    display: none !important;
-  }
+  script { display: none !important; }
 
-  .container, .app-wrapper {
-    display: block !important; 
-    height: auto !important;
-    overflow: visible !important;
-  }
-
-  .main-app-content {
-    padding: 0.5in !important;
-    width: 100% !important; 
-    height: auto !important;
-    overflow: visible !important;
-    border: none !important;
-    box-shadow: none !important;
-    margin: 0 !important;
-  }
-
-  #documentsSection {
-    display: block !important; 
-    height: auto !important;
-    overflow: visible !important;
-    padding: 0 !important; 
-  }
-
-  #documentsSection > h2 { 
-    display: block !important; 
-    text-align: center;
-    margin-bottom: 20px;
-    border-bottom: none !important;
-    font-size: 1.5rem;
-    color: black !important; 
-  }
-
-  #collaborativeEditor {
-    border: none !important;
-    box-shadow: none !important;
-    height: auto !important;
-    overflow: visible !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-    background-color: white !important;
-    color: black !important;
-    font-size: 12pt; 
-    line-height: 1.4;
-  }
-  
-  #collaborativeEditor *, #collaborativeEditor *::before, #collaborativeEditor *::after { /* Ensure all children also get print colors */
-    color: black !important;
-    background-color: transparent !important; /* Or white if specific elements need it */
-  }
-
-
-  a {
-    text-decoration: underline !important;
-    color: #0066cc !important;
-  }
-  
-  a[href^="http"]:after, a[href^="https"]:after {
-    content: " (" attr(href) ")";
-    font-size: 0.8em;
-    font-weight: normal;
-    color: #333;
-  }
-  a[href^="#"]:after, a[href^="javascript:"]:after {
-    content: "" !important;
-  }
+  .container, .app-wrapper { display: block !important; height: auto !important; overflow: visible !important; }
+  .main-app-content { padding: 0.5in !important; width: 100% !important; height: auto !important; overflow: visible !important; border: none !important; box-shadow: none !important; margin: 0 !important; }
+  #documentsSection { display: block !important; height: auto !important; overflow: visible !important; padding: 0 !important; }
+  #documentsSection > h2 { display: block !important; text-align: center; margin-bottom: 20px; border-bottom: none !important; font-size: 1.5rem; color: black !important; }
+  #collaborativeEditor { border: none !important; box-shadow: none !important; height: auto !important; overflow: visible !important; width: 100% !important; max-width: 100% !important; min-height: 0 !important; padding: 0 !important; background-color: white !important; color: black !important; font-size: 12pt; line-height: 1.4; }
+  #collaborativeEditor *, #collaborativeEditor *::before, #collaborativeEditor *::after { color: black !important; background-color: transparent !important; }
+  a { text-decoration: underline !important; color: #0066cc !important; }
+  a[href^="http"]:after, a[href^="https"]:after { content: " (" attr(href) ")"; font-size: 0.8em; font-weight: normal; color: #333; }
+  a[href^="#"]:after, a[href^="javascript:"]:after { content: "" !important; }
 }
 </style>
 
@@ -1583,9 +1067,10 @@ button:disabled {
         </nav>
 
         <main class="main-app-content">
-            <div id="inRoomContentHeader"> 
-                <div class="room-info-display">
+            <div id="inRoomContentHeader" class="header-context-area"> 
+                <div id="headerRoomInfoDisplay" class="room-info-display">
                     <p><strong>Workspace:</strong> <span id="currentRoomCodeSpan"></span><button id="copyRoomCodeBtn" class="copy-room-code-btn" title="Copy Room Code">📋</button></p>
+                    <p class="room-info-separator">|</p>
                     <p><strong>My Username:</strong> <span id="currentNicknameSpan"></span></p>
                 </div>
             </div>
@@ -1611,7 +1096,7 @@ button:disabled {
                 </div>
             </div>
 
-            <div id="videoChatSection" class="content-section hidden">
+            <div id="videoChatSection" class="content-section hidden section-pane">
                 <h2>Video Chat</h2>
                 <div class="video-chat-controls button-group">
                     <button id="startVideoCallBtn">Start Video Call</button>
@@ -1628,7 +1113,7 @@ button:disabled {
                 </div>
             </div>
             
-            <div id="audioChatSection" class="content-section hidden">
+            <div id="audioChatSection" class="content-section hidden section-pane">
                 <h2>Audio Chat</h2>
                 <div class="audio-chat-controls button-group">
                     <button id="startAudioCallBtn">Start Audio Call</button>
@@ -1639,7 +1124,7 @@ button:disabled {
                 </div>
             </div>
 
-            <div id="screenShareSection" class="content-section hidden">
+            <div id="screenShareSection" class="content-section hidden section-pane">
                 <h2>Shared Content (Screen)</h2>
                 <div class="sharing-controls button-group">
                     <button id="startShareBtn">Start Sharing Screen</button>
@@ -1648,27 +1133,36 @@ button:disabled {
                 <div id="remoteVideosContainer"></div>
             </div>
 
-            <div id="whiteboardSection" class="content-section hidden">
+            <div id="whiteboardSection" class="content-section hidden section-pane">
                 <h2>Collaborative Whiteboard</h2>
-                <div class="whiteboard-controls">
+                <div class="whiteboard-controls button-group">
+                    <div class="wb-tool-palette">
+                        <button class="wb-tool-btn" data-tool="pen" title="Pen">✏️</button>
+                        <button class="wb-tool-btn" data-tool="rectangle" title="Rectangle">▭</button>
+                        <button class="wb-tool-btn" data-tool="circle" title="Circle">⚪</button>
+                        <button class="wb-tool-btn" data-tool="eraser" title="Eraser">🧼</button>
+                    </div>
                     <label for="wbColorPicker">Color:</label> <input type="color" id="wbColorPicker" value="#000000">
-                    <label for="wbLineWidth">Width:</label> <input type="range" id="wbLineWidth" min="1" max="20" value="3">
-                    <span id="wbModeToggle" role="button" title="Toggle Draw/Erase">Draw Mode</span>
+                    <label for="wbLineWidth">Width:</label> <input type="range" id="wbLineWidth" min="1" max="30" value="3">
+                    <span id="wbLineWidthValue" style="min-width: 30px; text-align: right;">3px</span>
+                    <button id="wbZoomOutBtn" title="Zoom Out">➖</button>
+                    <span id="wbZoomLevelDisplay" style="min-width: 50px; text-align: center;">100%</span>
+                    <button id="wbZoomInBtn" title="Zoom In">➕</button>
                     <button id="wbClearBtn">Clear Board</button>
                 </div>
                 <canvas id="whiteboardCanvas" width="640" height="360"></canvas>
             </div>
 
-            <div id="kanbanSection" class="content-section hidden">
+            <div id="kanbanSection" class="content-section hidden section-pane">
                 <h2>Kanban Board</h2>
-                <div class="kanban-controls">
+                <div class="kanban-controls button-group">
                     <input type="text" id="newColumnNameInput" placeholder="New column name">
                     <button id="addColumnBtn">Add Column</button>
                 </div>
                 <div id="kanbanBoard" class="kanban-board"></div>
             </div>
 
-            <div id="documentsSection" class="content-section hidden">
+            <div id="documentsSection" class="content-section hidden section-pane">
                 <h2>Collaborative Documents</h2>
                 <div class="document-management-bar">
                     <h3>Documents:</h3>
@@ -1696,6 +1190,6 @@ button:disabled {
         </main>
     </div>
 </div>
-<script type="module" src="engine.js"></script>
+<script type="module" src="main.js"></script>
 </body>
 </html>
