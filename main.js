@@ -48,7 +48,7 @@ let peerNicknames = {}; // { peerId: nickname }
 let isHost = false;
 let importedWorkspaceState = null;
 
-// Trystero action send/receive function pairs 
+// Trystero action send/receive function pairs - to be initialized in joinRoomAndSetup
 let sendChatMessage, onChatMessage, sendNickname, onNickname, sendPrivateMessage, onPrivateMessage;
 let sendFileMeta, onFileMeta, sendFileChunk, onFileChunk;
 let sendDrawCommand, onDrawCommand, sendInitialWhiteboard, onInitialWhiteboard;

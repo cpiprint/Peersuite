@@ -1,3 +1,6 @@
+// media.js: Screen Share, Video Chat, Audio Chat
+
+// --- Global variables for media.js (scoped to this module) ---
 let localScreenShareStream;
 let localVideoCallStream;
 let localAudioStream;
@@ -5,6 +8,7 @@ let localAudioStream;
 let peerVideoElements = {}; // { peerId: { wrapper, video, stream, nicknameP } }
 let peerAudios = {}; // { peerId: audio_element }
 
+// --- Dependencies from main.js (will be set in initMediaFeatures) ---
 let roomApiDep, logStatusDep, showNotificationDep;
 let localGeneratedPeerIdDep;
 let getPeerNicknamesDep;
@@ -86,8 +90,8 @@ function checkMediaCapabilities() {
 
 
 export function enableMediaButtons() {
-    checkMediaCapabilities(); 
-    
+    checkMediaCapabilities(); // This will set initial disabled state based on support
+    // Then, enable if supported (will be overridden by checkMediaCapabilities if not supported)
     if(startShareBtn && startShareBtn.title !== "Screen sharing not supported") startShareBtn.disabled = false;
     if(stopShareBtn) stopShareBtn.disabled = true;
 
@@ -217,6 +221,7 @@ function displayRemoteScreenShareStream(stream, peerId) {
 }
 
 
+// --- Video Chat ---
 async function startLocalVideoCall() {
     if (!roomApiDep) { logStatusDep("Not in a room to start video call.", true); return; }
     try {
@@ -512,7 +517,8 @@ export function resetMediaUIAndState() {
     });
     peerAudios = {};
     
-    enableMediaButtons(); 
+    enableMediaButtons(); // This will also call checkMediaCapabilities to set correct initial states
+}
 
 export function updatePeerNicknameInUI(peerId, newNickname) {
     if (peerVideoElements[peerId] && peerVideoElements[peerId].nicknameP) {

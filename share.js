@@ -22,6 +22,7 @@ let draggedCardData = null;
 let documents = [];
 let currentActiveDocumentId = null;
 
+// --- Dependencies from main.js (will be set in initShareFeatures) ---
 let sendChatMessageDep, sendPrivateMessageDep, sendFileMetaDep, sendFileChunkDep;
 let sendDrawCommandDep, sendInitialWhiteboardDep, sendKanbanUpdateDep, sendInitialKanbanDep;
 let sendChatHistoryDep, sendInitialDocumentsDep, sendCreateDocumentDep, sendRenameDocumentDep;
@@ -474,7 +475,7 @@ export function primePrivateMessage(nickname) {
 function initWhiteboardInternal() {
     if (!whiteboardCanvas || !wbColorPicker || !wbLineWidth || !wbClearBtn || !wbLineWidthValue || !wbToolPalette || !wbZoomOutBtn || !wbZoomLevelDisplay || !wbZoomInBtn) return;
     
-    whiteboardCanvas.style.backgroundColor = '#FFFFFF'; 
+    whiteboardCanvas.style.backgroundColor = '#FFFFFF'; // Ensure canvas background is always white
     wbCtx = whiteboardCanvas.getContext('2d');
     resizeWhiteboardAndRedraw();
 
@@ -596,7 +597,7 @@ function handleWbMouseMove(e) {
             type: currentWbTool,
             x0: wbLastX, y0: wbLastY,
             x1: currentLogicalX, y1: currentLogicalY,
-            color: (currentWbTool === 'pen') ? wbColorPicker.value : '#FFFFFF', 
+            color: (currentWbTool === 'pen') ? wbColorPicker.value : '#FFFFFF', // Eraser is always white
             lineWidth: (currentWbTool === 'pen') ? parseFloat(wbLineWidth.value) : Math.max(10, parseFloat(wbLineWidth.value) * 1.5)
         };
         applyDrawCommand(drawCmdData);
@@ -727,7 +728,7 @@ function clearWhiteboardAndBroadcast() {
 function redrawWhiteboardFromHistory() {
     if (!wbCtx || !whiteboardCanvas || whiteboardCanvas.width === 0 || whiteboardCanvas.height === 0) return;
 
-    wbCtx.fillStyle = '#FFFFFF'; 
+    wbCtx.fillStyle = '#FFFFFF'; // Always clear to white first
     wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
     
     wbCtx.strokeStyle = wbColorPicker ? wbColorPicker.value : '#000000'; 
@@ -737,7 +738,7 @@ function redrawWhiteboardFromHistory() {
     
     whiteboardHistory.forEach(cmd => {
         if (cmd.type === 'clear') {
-             wbCtx.fillStyle = '#FFFFFF';  to white
+             wbCtx.fillStyle = '#FFFFFF'; // Clear command in history also clears to white
              wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
         } else {
              applyDrawCommand(cmd);
@@ -944,6 +945,7 @@ export function handleInitialKanban(initialData, peerId) {
 
 
 // --- Documents Feature ---
+// ... (Document code remains the same as previous correct version) ...
 const debouncedSendActiveDocumentContentUpdate = debounce(() => {
     if (sendDocumentContentUpdateDep && currentActiveDocumentId && collaborativeEditor) {
         const activeDoc = documents.find(d => d.id === currentActiveDocumentId);
