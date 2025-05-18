@@ -1,7 +1,8 @@
 # Peersuite
 Peer to peer workspace
 
-![Screenshot From 2025-05-11 20-38-36](https://github.com/user-attachments/assets/fccc483f-fa82-4e6c-9bdc-4a3d643f8004)
+![Screenshot From 2025-05-18 18-45-22](https://github.com/user-attachments/assets/85a61165-6373-4c40-a062-dcb36c4ac3f2)
+
 
 
 Peersuite is a open source, decentralized, private alternative to apps like discord or slack.
@@ -16,6 +17,7 @@ Usage: You can use https://peersuite.space online, download the files and run th
 ## Docker
 
 You can also run Peersuite using Docker.
+Download from https://hub.docker.com/repository/docker/openconstruct/peersuite   or build instructions below
 
 1.  **Build the Docker image:**
     ```bash
