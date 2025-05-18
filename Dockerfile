@@ -2,7 +2,9 @@ FROM nginx:alpine
 
 # Copy the application files to the nginx html directory
 COPY index.html /usr/share/nginx/html/
-COPY engine.js /usr/share/nginx/html/
+COPY main.js /usr/share/nginx/html/
+COPY share.js /usr/share/nginx/html/
+COPY media.js /usr/share/nginx/html/
 COPY trystero-torrent.min.js /usr/share/nginx/html/
 COPY peerspace.png /usr/share/nginx/html/
 # Add any other static assets like CSS files if they are separate
