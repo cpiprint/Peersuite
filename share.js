@@ -1,6 +1,4 @@
-// share.js: Chat, Whiteboard, Kanban, Documents
 
-// --- Global variables for share.js (scoped to this module) ---
 let chatHistory = [];
 let incomingFileBuffers = new Map(); // { bufferKey: { meta, chunks, receivedBytes } }
 
@@ -22,11 +20,17 @@ let draggedCardData = null;
 let documents = [];
 let currentActiveDocumentId = null;
 
+let channels = []; // For chat channels
+let currentActiveChannelId = null; // ID of the active channel
+
 // --- Dependencies from main.js (will be set in initShareFeatures) ---
 let sendChatMessageDep, sendPrivateMessageDep, sendFileMetaDep, sendFileChunkDep;
 let sendDrawCommandDep, sendInitialWhiteboardDep, sendKanbanUpdateDep, sendInitialKanbanDep;
 let sendChatHistoryDep, sendInitialDocumentsDep, sendCreateDocumentDep, sendRenameDocumentDep;
 let sendDeleteDocumentDep, sendDocumentContentUpdateDep;
+let sendCreateChannelDep, onCreateChannelDep;
+let sendInitialChannelsDep, onInitialChannelsDep;
+
 
 let logStatusDep, showNotificationDep;
 let localGeneratedPeerIdDep;
@@ -35,6 +39,8 @@ let currentRoomIdDep;
 
 // --- DOM Elements (selected within this module) ---
 let chatArea, messageInput, sendMessageBtn, emojiIcon, emojiPickerPopup, triggerFileInput, chatFileInput;
+let channelListDiv, newChannelNameInput, addChannelBtn; // For channels
+
 let whiteboardCanvas, wbColorPicker, wbLineWidth, wbClearBtn, wbLineWidthValue, wbToolPalette, wbZoomOutBtn, wbZoomLevelDisplay, wbZoomInBtn;
 let kanbanBoard, newColumnNameInput, addColumnBtn;
 let documentsSection, documentListDiv, newDocBtn, renameDocBtn, deleteDocBtn, collaborativeEditor;
@@ -49,6 +55,11 @@ function selectShareDomElements() {
     emojiPickerPopup = document.getElementById('emojiPickerPopup');
     triggerFileInput = document.getElementById('triggerFileInput');
     chatFileInput = document.getElementById('chatFileInput');
+
+    // For channels
+    channelListDiv = document.getElementById('channelList');
+    newChannelNameInput = document.getElementById('newChannelNameInput');
+    addChannelBtn = document.getElementById('addChannelBtn');
 
     whiteboardCanvas = document.getElementById('whiteboardCanvas');
     wbColorPicker = document.getElementById('wbColorPicker');
@@ -104,6 +115,11 @@ export function initShareFeatures(dependencies) {
     sendRenameDocumentDep = dependencies.sendRenameDocument;
     sendDeleteDocumentDep = dependencies.sendDeleteDocument;
     sendDocumentContentUpdateDep = dependencies.sendDocumentContentUpdate;
+    sendCreateChannelDep = dependencies.sendCreateChannel;
+    onCreateChannelDep = dependencies.onCreateChannel;
+    sendInitialChannelsDep = dependencies.sendInitialChannels;
+    onInitialChannelsDep = dependencies.onInitialChannels;
+
 
     logStatusDep = dependencies.logStatus;
     showNotificationDep = dependencies.showNotification;
@@ -122,11 +138,25 @@ export function initShareFeatures(dependencies) {
     const importedState = dependencies.getImportedWorkspaceState();
     if (importedState && getIsHostDep && getIsHostDep()) {
         loadChatHistoryFromImport(importedState.chatHistory || []);
+        if (importedState.channels) {
+            channels = importedState.channels;
+            currentActiveChannelId = importedState.currentActiveChannelIdForImport || (channels.length > 0 ? channels[0].id : null);
+        }
         loadWhiteboardHistoryFromImport(importedState.whiteboardHistory || []);
         loadKanbanDataFromImport(importedState.kanbanData || { columns: [] });
         loadDocumentsFromImport(importedState.documents || [], importedState.currentActiveDocumentId);
         if(dependencies.clearImportedWorkspaceState) dependencies.clearImportedWorkspaceState();
     }
+    
+    if (getIsHostDep && getIsHostDep() && channels.length === 0) {
+        _createAndBroadcastChannel("#general", true);
+    } else if (channels.length > 0 && !currentActiveChannelId) {
+        setActiveChannel(channels[0].id, false);
+    }
+
+
+    renderChannelList();
+    displayChatForCurrentChannel();
 
     return { 
         handleChatMessage, handlePrivateMessage, handleFileMeta, handleFileChunk,
@@ -135,7 +165,7 @@ export function initShareFeatures(dependencies) {
         handleInitialDocuments, handleCreateDocument, handleRenameDocument, handleDeleteDocument, handleDocumentContentUpdate,
         sendFullStateToPeer,
         displaySystemMessage,
-        displayInitialChatHistory,
+        // displayInitialChatHistory, // Replaced by displayChatForCurrentChannel
         updateChatMessageInputPlaceholder,
         primePrivateMessage,
         hideEmojiPicker,
@@ -146,6 +176,7 @@ export function initShareFeatures(dependencies) {
         renderDocumentsIfActive,
         ensureDefaultDocument,
         setShareModulePeerInfo,
+        handleCreateChannel, handleInitialChannels, // NEW
     };
 }
 
@@ -175,6 +206,7 @@ export function handleShareModulePeerLeave(peerId) {
 // --- Chat Feature ---
 function initChat() {
     if (!sendMessageBtn || !messageInput || !triggerFileInput || !chatFileInput || !emojiIcon || !emojiPickerPopup) return;
+    if (!addChannelBtn || !newChannelNameInput || !channelListDiv) return; // Check channel elements
 
     sendMessageBtn.addEventListener('click', handleSendMessage);
     messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSendMessage(); });
@@ -195,6 +227,8 @@ function initChat() {
             emojiPickerPopup.classList.add('hidden');
         }
     });
+    // Channel creation
+    addChannelBtn.addEventListener('click', handleAddChannelUI);
 }
 
 export function initializeEmojiPicker() {
@@ -232,6 +266,104 @@ function insertEmojiIntoInput(emoji) {
 export function hideEmojiPicker() {
     if(emojiPickerPopup) emojiPickerPopup.classList.add('hidden');
 }
+
+function _createAndBroadcastChannel(channelName, isDefault = false) {
+    if (!channelName || !channelName.trim()) return null;
+    let saneChannelName = channelName.trim();
+    if (!saneChannelName.startsWith('#')) {
+        saneChannelName = '#' + saneChannelName;
+    }
+    saneChannelName = saneChannelName.replace(/\s+/g, '-').toLowerCase(); // Basic sanitization
+
+    if (channels.find(ch => ch.name === saneChannelName)) {
+        if(logStatusDep && !isDefault) logStatusDep(`Channel "${saneChannelName}" already exists.`, true);
+        return null;
+    }
+
+    const newChannel = { id: `ch-${Date.now()}-${Math.random().toString(36).substring(2,5)}`, name: saneChannelName };
+    channels.push(newChannel);
+    
+    if (sendCreateChannelDep) {
+        sendCreateChannelDep(newChannel); // Broadcast to others
+    }
+    if (isDefault || channels.length === 1) { // Auto-activate if it's the first/default
+        setActiveChannel(newChannel.id, false);
+    }
+    renderChannelList();
+    return newChannel;
+}
+
+
+function handleAddChannelUI() {
+    if (!newChannelNameInput) return;
+    const channelName = newChannelNameInput.value;
+    const createdChannel = _createAndBroadcastChannel(channelName);
+    if (createdChannel) {
+        newChannelNameInput.value = '';
+        // setActiveChannel(createdChannel.id); // No need, _createAndBroadcastChannel handles it if first/default
+        if(logStatusDep) logStatusDep(`Channel "${createdChannel.name}" created.`);
+    }
+}
+
+function renderChannelList() {
+    if (!channelListDiv) return;
+    channelListDiv.innerHTML = '';
+    channels.forEach(channel => {
+        const channelItem = document.createElement('div');
+        channelItem.classList.add('channel-list-item');
+        channelItem.textContent = channel.name;
+        channelItem.dataset.channelId = channel.id;
+        if (channel.id === currentActiveChannelId) {
+            channelItem.classList.add('active');
+        }
+        channelItem.addEventListener('click', () => setActiveChannel(channel.id));
+
+        const notifDot = document.createElement('span');
+        notifDot.classList.add('channel-notification-dot', 'hidden'); // Hidden by default
+        channelItem.appendChild(notifDot);
+
+        channelListDiv.appendChild(channelItem);
+    });
+}
+
+function setActiveChannel(channelId, clearNotifications = true) {
+    if (currentActiveChannelId === channelId && !clearNotifications) {
+        renderChannelList(); 
+        return;
+    }
+    currentActiveChannelId = channelId;
+    renderChannelList(); 
+    displayChatForCurrentChannel();
+
+    if (clearNotifications && channelListDiv) { // Added channelListDiv check
+        const channelDot = channelListDiv.querySelector(`.channel-list-item[data-channel-id="${channelId}"] .channel-notification-dot`);
+        if (channelDot) {
+            channelDot.classList.add('hidden');
+        }
+    }
+    if(messageInput) {
+        const activeChannel = channels.find(c=>c.id === channelId);
+        messageInput.placeholder = `Message ${activeChannel?.name || (currentRoomIdDep || '')}`;
+    }
+}
+
+function displayChatForCurrentChannel() {
+    if (!chatArea) return;
+    chatArea.innerHTML = '';
+    if (!currentActiveChannelId) {
+        return;
+    }
+    const messagesForChannel = chatHistory.filter(msg => msg.channelId === currentActiveChannelId || msg.pmInfo || msg.fileMeta || msg.isSystem); // Also show global messages
+    messagesForChannel.forEach(msg => {
+        // If it's a channel-specific message, it must match currentActiveChannelId
+        // If it's a PM/File/System message, it's displayed regardless of channelId (as they are global)
+        if ( (msg.channelId && msg.channelId === currentActiveChannelId) || msg.pmInfo || msg.fileMeta || msg.isSystem ) {
+            displayMessage(msg, msg.senderPeerId === localGeneratedPeerIdDep, msg.isSystem);
+        }
+    });
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
 
 function displayMessage(msgObject, isSelf = false, isSystem = false) {
     if (!chatArea) return;
@@ -277,7 +409,7 @@ function displayMessage(msgObject, isSelf = false, isSystem = false) {
             progressSpan.textContent = ` (Receiving 0%)`;
             messageDiv.appendChild(progressSpan);
         }
-    } else {
+    } else { // Regular channel message
         messageDiv.classList.add(isSelf ? 'self' : 'other');
         const senderSpan = document.createElement('span'); senderSpan.classList.add('sender');
         senderSpan.textContent = isSelf ? 'You' : senderNickname;
@@ -288,17 +420,25 @@ function displayMessage(msgObject, isSelf = false, isSystem = false) {
     messageDiv.appendChild(timestampSpan);
     chatArea.appendChild(messageDiv);
     chatArea.scrollTop = chatArea.scrollHeight;
-    if (!isSelf && !isSystem && !msgObject.isHistorical && showNotificationDep) showNotificationDep('chatSection');
 }
 
 function addMessageToHistoryAndDisplay(msgData, isSelf = false, isSystem = false) {
+    let channelIdForMsg = msgData.channelId;
+    if (isSelf && !isSystem && !msgData.pmInfo && !msgData.fileMeta && !channelIdForMsg) {
+        channelIdForMsg = currentActiveChannelId;
+    }
+
     const fullMsgObject = {
         ...msgData,
+        channelId: channelIdForMsg,
         timestamp: msgData.timestamp || Date.now(),
         senderPeerId: isSelf ? localGeneratedPeerIdDep : msgData.senderPeerId
     };
     chatHistory.push(fullMsgObject);
-    displayMessage(fullMsgObject, isSelf, isSystem);
+
+    if ( (fullMsgObject.channelId && fullMsgObject.channelId === currentActiveChannelId) || isSystem || fullMsgObject.pmInfo || fullMsgObject.fileMeta) {
+        displayMessage(fullMsgObject, isSelf, isSystem);
+    }
 }
 
 function handleSendMessage() {
@@ -308,7 +448,7 @@ function handleSendMessage() {
     const localCurrentNickname = getLocalNicknameDep ? getLocalNicknameDep() : 'You';
 
     if (messageText.toLowerCase().startsWith('/pm ')) {
-        const parts = messageText.substring(4).split(' ');
+         const parts = messageText.substring(4).split(' ');
         const targetNickname = parts.shift();
         const pmContent = parts.join(' ').trim();
         if (!targetNickname || !pmContent) {
@@ -324,8 +464,12 @@ function handleSendMessage() {
         } else {
             addMessageToHistoryAndDisplay({ message: `User "${targetNickname}" not found or PM failed.`, timestamp }, false, true);
         }
-    } else if (sendChatMessageDep) {
-        const msgData = { message: messageText, timestamp };
+    } else { // Regular channel message
+        if (!currentActiveChannelId) {
+            addMessageToHistoryAndDisplay({ message: "Please select a channel to send a message.", timestamp }, false, true);
+            return;
+        }
+        const msgData = { message: messageText, timestamp, channelId: currentActiveChannelId };
         sendChatMessageDep(msgData);
         addMessageToHistoryAndDisplay({ senderNickname: localCurrentNickname, ...msgData }, true);
     }
@@ -341,9 +485,10 @@ async function handleChatFileSelected(event) {
     if(logStatusDep) logStatusDep(`Preparing to send file: ${file.name}`);
     const fileMeta = { name: file.name, type: file.type, size: file.size, id: Date.now().toString() };
     
+    // File messages are global, not tied to a channel for display in this simple model
     addMessageToHistoryAndDisplay({ senderNickname: localCurrentNickname, fileMeta: { ...fileMeta, receiving: true } }, true);
     
-    sendFileMetaDep(fileMeta);
+    sendFileMetaDep(fileMeta); // File meta doesn't need channelId as it's a global event
 
     const CHUNK_SIZE = 16 * 1024;
     let offset = 0;
@@ -389,18 +534,32 @@ async function handleChatFileSelected(event) {
 
 export function handleChatMessage(msgData, peerId) {
     const senderNickname = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : `Peer ${peerId.substring(0, 6)}`;
-    addMessageToHistoryAndDisplay({ ...msgData, senderNickname, senderPeerId: peerId }, false);
+    const fullMsgObject = { ...msgData, senderNickname, senderPeerId: peerId, timestamp: msgData.timestamp || Date.now() };
+    
+    chatHistory.push(fullMsgObject);
+
+    if (fullMsgObject.channelId === currentActiveChannelId) {
+        displayMessage(fullMsgObject, false);
+    } else if (fullMsgObject.channelId && channelListDiv) { // Added channelListDiv check
+        const channelDot = channelListDiv.querySelector(`.channel-list-item[data-channel-id="${fullMsgObject.channelId}"] .channel-notification-dot`);
+        if (channelDot) {
+            channelDot.classList.remove('hidden');
+        }
+    }
+    if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('chatSection');
 }
 export function handlePrivateMessage(pmData, senderPeerId) {
     const sender = (getPeerNicknamesDep && getPeerNicknamesDep()[senderPeerId]) ? getPeerNicknamesDep()[senderPeerId] : `Peer ${senderPeerId.substring(0, 6)}`;
-    addMessageToHistoryAndDisplay({ senderNickname: sender, message: pmData.content, pmInfo: { type: 'received', sender: sender }, senderPeerId: senderPeerId }, false);
+    addMessageToHistoryAndDisplay({ senderNickname: sender, message: pmData.content, pmInfo: { type: 'received', sender: sender }, senderPeerId: senderPeerId, timestamp: pmData.timestamp || Date.now() }, false);
+    if (senderPeerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('chatSection'); // PMs also notify chat section
 }
 export function handleFileMeta(meta, peerId) {
     const senderNickname = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : `Peer ${peerId.substring(0, 6)}`;
     const bufferKey = `${peerId}_${meta.id}`;
     incomingFileBuffers.set(bufferKey, { meta, chunks: [], receivedBytes: 0 });
-    addMessageToHistoryAndDisplay({ senderNickname, fileMeta: { ...meta, receiving: true }, senderPeerId: peerId }, false);
+    addMessageToHistoryAndDisplay({ senderNickname, fileMeta: { ...meta, receiving: true }, senderPeerId: peerId, timestamp: Date.now() }, false);
     if(logStatusDep) logStatusDep(`${senderNickname} is sending file: ${meta.name}`);
+    if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('chatSection'); // File shares also notify
 }
 export function handleFileChunk(chunk, peerId, chunkMeta) {
     const senderNickname = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : `Peer ${peerId.substring(0, 6)}`;
@@ -451,17 +610,18 @@ export function handleFileChunk(chunk, peerId, chunkMeta) {
 export function handleChatHistory(history, peerId) {
     if (getIsHostDep && !getIsHostDep()) {
         chatHistory = history;
-        if (chatArea) chatArea.innerHTML = '';
-        chatHistory.forEach(msg => displayMessage({ ...msg, isHistorical: true }, msg.senderPeerId === localGeneratedPeerIdDep, msg.isSystem));
+        if (currentActiveChannelId) {
+            displayChatForCurrentChannel();
+        }
         if(logStatusDep) logStatusDep(`Received chat history from ${(getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : 'host'}.`);
     }
 }
-export function displayInitialChatHistory() {
-    if (chatArea) chatArea.innerHTML = '';
-    chatHistory.forEach(msg => displayMessage({ ...msg, isHistorical: true }, msg.senderPeerId === localGeneratedPeerIdDep, msg.isSystem));
-}
+// export function displayInitialChatHistory() { // Replaced by displayChatForCurrentChannel
+//     if (chatArea) chatArea.innerHTML = '';
+//     chatHistory.forEach(msg => displayMessage({ ...msg, isHistorical: true }, msg.senderPeerId === localGeneratedPeerIdDep, msg.isSystem));
+// }
 export function updateChatMessageInputPlaceholder(roomId) {
-    if (messageInput) messageInput.placeholder = `Message #${roomId || currentRoomIdDep}`;
+    // This is now handled by setActiveChannel
 }
 export function primePrivateMessage(nickname) {
     if (messageInput) {
@@ -471,11 +631,41 @@ export function primePrivateMessage(nickname) {
 }
 
 
+// NEW: Channel Sync Handlers
+export function handleCreateChannel(newChannelData, peerId) {
+    if (!channels.find(ch => ch.id === newChannelData.id)) {
+        channels.push(newChannelData);
+        renderChannelList();
+        if (peerId !== localGeneratedPeerIdDep && logStatusDep) {
+            const senderName = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : 'another user';
+            logStatusDep(`Channel "${newChannelData.name}" created by ${senderName}.`);
+        }
+        if (!currentActiveChannelId && channels.length === 1) {
+            setActiveChannel(newChannelData.id, false);
+        }
+    }
+}
+
+export function handleInitialChannels(receivedChannels, peerId) {
+    if (getIsHostDep && !getIsHostDep()) {
+        channels = receivedChannels || [];
+        if (channels.length > 0 && !currentActiveChannelId) {
+            currentActiveChannelId = channels[0].id;
+        }
+        renderChannelList();
+        if (chatHistory.length > 0) {
+             displayChatForCurrentChannel();
+        }
+        if(logStatusDep) logStatusDep(`Received channel list from ${(getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : 'host'}.`);
+    }
+}
+
+
 // --- Whiteboard Feature ---
 function initWhiteboardInternal() {
     if (!whiteboardCanvas || !wbColorPicker || !wbLineWidth || !wbClearBtn || !wbLineWidthValue || !wbToolPalette || !wbZoomOutBtn || !wbZoomLevelDisplay || !wbZoomInBtn) return;
     
-    whiteboardCanvas.style.backgroundColor = '#FFFFFF'; // Ensure canvas background is always white
+    whiteboardCanvas.style.backgroundColor = '#FFFFFF'; 
     wbCtx = whiteboardCanvas.getContext('2d');
     resizeWhiteboardAndRedraw();
 
@@ -494,7 +684,7 @@ function initWhiteboardInternal() {
             button.classList.add('active');
             currentWbTool = button.dataset.tool;
             whiteboardCanvas.style.cursor = (currentWbTool === 'pen' || currentWbTool === 'rectangle' || currentWbTool === 'circle') ? 'crosshair' 
-                                         : (currentWbTool === 'eraser') ? 'grab'
+                                         : (currentWbTool === 'eraser') ? 'grab' // Typically eraser is a shape, but this is how it was
                                          : 'default';
         });
     });
@@ -597,7 +787,7 @@ function handleWbMouseMove(e) {
             type: currentWbTool,
             x0: wbLastX, y0: wbLastY,
             x1: currentLogicalX, y1: currentLogicalY,
-            color: (currentWbTool === 'pen') ? wbColorPicker.value : '#FFFFFF', // Eraser is always white
+            color: (currentWbTool === 'pen') ? wbColorPicker.value : '#FFFFFF',
             lineWidth: (currentWbTool === 'pen') ? parseFloat(wbLineWidth.value) : Math.max(10, parseFloat(wbLineWidth.value) * 1.5)
         };
         applyDrawCommand(drawCmdData);
@@ -665,7 +855,7 @@ function applyDrawCommand(cmd) {
             wbCtx.closePath();
             break;
         case 'eraser': case 'erase':
-            wbCtx.strokeStyle = '#FFFFFF'; // Eraser is always white
+            wbCtx.strokeStyle = '#FFFFFF';
             wbCtx.lineWidth = transformSize(cmd.lineWidth); 
             wbCtx.beginPath();
             wbCtx.moveTo(transformX(cmd.x0), transformY(cmd.y0));
@@ -686,7 +876,7 @@ function applyDrawCommand(cmd) {
             wbCtx.closePath();
             break;
         case 'clear':
-            wbCtx.fillStyle = '#FFFFFF'; // Clear to white
+            wbCtx.fillStyle = '#FFFFFF';
             wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
             wbPanX = 0; wbPanY = 0; wbZoomLevel = 1.0;
             updateZoomDisplay();
@@ -709,7 +899,6 @@ export function resizeWhiteboardAndRedraw() {
         whiteboardCanvas.width = displayWidth;
         whiteboardCanvas.height = displayHeight;
     }
-    // Ensure canvas background is white after resize, before redrawing history
     if (wbCtx) {
         wbCtx.fillStyle = '#FFFFFF';
         wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
@@ -719,7 +908,7 @@ export function resizeWhiteboardAndRedraw() {
 
 function clearWhiteboardAndBroadcast() {
     const clearCmd = { type: 'clear' };
-    applyDrawCommand(clearCmd); // This will fill with white
+    applyDrawCommand(clearCmd);
     whiteboardHistory = [clearCmd];
     if (sendDrawCommandDep) sendDrawCommandDep(clearCmd);
     if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('whiteboardSection');
@@ -728,7 +917,7 @@ function clearWhiteboardAndBroadcast() {
 function redrawWhiteboardFromHistory() {
     if (!wbCtx || !whiteboardCanvas || whiteboardCanvas.width === 0 || whiteboardCanvas.height === 0) return;
 
-    wbCtx.fillStyle = '#FFFFFF'; // Always clear to white first
+    wbCtx.fillStyle = '#FFFFFF';
     wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
     
     wbCtx.strokeStyle = wbColorPicker ? wbColorPicker.value : '#000000'; 
@@ -738,7 +927,7 @@ function redrawWhiteboardFromHistory() {
     
     whiteboardHistory.forEach(cmd => {
         if (cmd.type === 'clear') {
-             wbCtx.fillStyle = '#FFFFFF'; // Clear command in history also clears to white
+             wbCtx.fillStyle = '#FFFFFF';
              wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
         } else {
              applyDrawCommand(cmd);
@@ -747,7 +936,6 @@ function redrawWhiteboardFromHistory() {
 }
 export function redrawWhiteboardFromHistoryIfVisible(force = false) {
     if (whiteboardCanvas && (whiteboardCanvas.offsetParent || force)) {
-        // Ensure canvas background is white before redrawing history, especially if forced
         if (wbCtx) {
             wbCtx.fillStyle = '#FFFFFF';
             wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
@@ -776,7 +964,6 @@ export function handleInitialWhiteboard(history, peerId) {
 }
 
 // --- Kanban Feature ---
-// ... (Kanban code remains the same as previous correct version) ...
 function initKanbanInternal() {
     if(!addColumnBtn || !kanbanBoard || !newColumnNameInput) return;
     addColumnBtn.addEventListener('click', handleAddKanbanColumn);
@@ -945,7 +1132,6 @@ export function handleInitialKanban(initialData, peerId) {
 
 
 // --- Documents Feature ---
-// ... (Document code remains the same as previous correct version) ...
 const debouncedSendActiveDocumentContentUpdate = debounce(() => {
     if (sendDocumentContentUpdateDep && currentActiveDocumentId && collaborativeEditor) {
         const activeDoc = documents.find(d => d.id === currentActiveDocumentId);
@@ -1115,20 +1301,26 @@ export function handleDocumentContentUpdate(data, peerId) {
 export function getShareableData() {
     if (currentActiveDocumentId && collaborativeEditor) {
         const activeDoc = documents.find(d => d.id === currentActiveDocumentId);
-        if (activeDoc && collaborativeEditor.innerHTML !== activeDoc.htmlContent) activeDoc.htmlContent = collaborativeEditor.innerHTML;
+        if (activeDoc && collaborativeEditor.innerHTML !== activeDoc.htmlContent) activeDoc.htmlContent = activeDoc.innerHTML;
     }
-    return { chatHistory, whiteboardHistory, kanbanData, documents, currentActiveDocumentId };
+    return { chatHistory, whiteboardHistory, kanbanData, documents, currentActiveDocumentId, channels, currentActiveChannelIdForImport: currentActiveChannelId };
 }
-export function loadShareableData(data) {
+export function loadShareableData(data) { // Called for host loading an imported file
     chatHistory = data.chatHistory || [];
     whiteboardHistory = data.whiteboardHistory || [];
     kanbanData = data.kanbanData || { columns: [] };
     documents = data.documents || [];
     currentActiveDocumentId = data.currentActiveDocumentId || null;
-    displayInitialChatHistory();
-    redrawWhiteboardFromHistoryIfVisible(true);
-    renderKanbanBoardIfActive(true);
-    renderDocumentsIfActive(true);
+    channels = data.channels || [];
+    currentActiveChannelId = data.currentActiveChannelIdForImport || (channels.length > 0 ? channels[0].id : null);
+
+    // Don't call display/render functions here directly, initShareFeatures will handle it
+    // after this function returns and initial setup (like default channel creation for host) happens.
+    
+    // displayInitialChatHistory(); // Replaced
+    // redrawWhiteboardFromHistoryIfVisible(true); // Handled by init
+    // renderKanbanBoardIfActive(true); // Handled by init
+    // renderDocumentsIfActive(true); // Handled by init
 }
 function loadChatHistoryFromImport(importedHistory) { chatHistory = importedHistory; }
 function loadWhiteboardHistoryFromImport(importedHistory) { whiteboardHistory = importedHistory; wbZoomLevel = 1.0; wbPanX = 0; wbPanY = 0; updateZoomDisplay(); }
@@ -1139,6 +1331,8 @@ function loadDocumentsFromImport(importedDocs, activeId) {
 }
 export function sendFullStateToPeer(peerId) {
     if (getIsHostDep && getIsHostDep()) {
+        if (sendInitialChannelsDep) sendInitialChannelsDep(channels, peerId);
+        
         if (sendChatHistoryDep && chatHistory.length > 0) sendChatHistoryDep(chatHistory, peerId);
         if (sendInitialWhiteboardDep && whiteboardHistory.length > 0) sendInitialWhiteboardDep(whiteboardHistory, peerId);
         if (sendInitialKanbanDep && (kanbanData.columns && kanbanData.columns.length > 0)) sendInitialKanbanDep(kanbanData, peerId);
@@ -1146,7 +1340,9 @@ export function sendFullStateToPeer(peerId) {
     }
 }
 export function displaySystemMessage(message) {
-    addMessageToHistoryAndDisplay({ message, timestamp: Date.now() }, false, true);
+    // System messages are global, assign to current channel if one exists, or special marker if not
+    const channelIdForSystem = currentActiveChannelId || 'system-global';
+    addMessageToHistoryAndDisplay({ message, timestamp: Date.now(), channelId: channelIdForSystem }, false, true);
 }
 
 export function resetShareModuleStates(isCreatingHost = false) {
@@ -1155,19 +1351,23 @@ export function resetShareModuleStates(isCreatingHost = false) {
     if (messageInput) messageInput.value = '';
     incomingFileBuffers.clear();
 
+    channels = [];
+    currentActiveChannelId = null;
+    if(channelListDiv) channelListDiv.innerHTML = '';
+    if(newChannelNameInput) newChannelNameInput.value = '';
+
+
     whiteboardHistory = []; wbZoomLevel = 1.0; wbPanX = 0; wbPanY = 0;
     if(wbZoomLevelDisplay) updateZoomDisplay();
-    if (wbCtx && whiteboardCanvas && whiteboardCanvas.offsetParent) { // only clear if its visible
-         wbCtx.fillStyle = '#FFFFFF'; // Always clear to white
+    if (wbCtx && whiteboardCanvas ) { // Removed offsetParent check for general reset
+         wbCtx.fillStyle = '#FFFFFF';
          wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
-    } else if (whiteboardCanvas) {
-        // If canvas exists but not visible, it will be cleared to white on next visibility/redraw
     }
-
 
     kanbanData = { columns: [] }; if (kanbanBoard) kanbanBoard.innerHTML = '';
     documents = []; currentActiveDocumentId = null;
     if (documentListDiv) documentListDiv.innerHTML = '';
     if (collaborativeEditor) { collaborativeEditor.innerHTML = '<p>Select or create a document.</p>'; collaborativeEditor.contentEditable = "false"; }
     
+    // Default channel creation for host is handled in initShareFeatures
 }

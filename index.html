@@ -110,10 +110,12 @@ button,
 .document-list-item, .document-formatting-controls, #collaborativeEditor,
 #userList, .emoji-picker-popup, .kanban-column, .kanban-card,
 .theme-switch-track, .maximize-btn,
-#localVideo, .remote-video-wrapper video {
+#localVideo, .remote-video-wrapper video,
+.channel-list-item { /* Added */
     border-radius: var(--radius-sm);
 }
-.setup-controls-container, .section-pane, .chat-main, .user-list-sidebar, .system-message {
+.setup-controls-container, .section-pane, .chat-main, .user-list-sidebar, .system-message,
+.chat-sidebar, .channel-list-container { /* Added */
     border-radius: var(--radius-md);
 }
 .section-pane, .chat-main, .user-list-sidebar,
@@ -125,7 +127,8 @@ button,
 .message, .system-message,
 #userList, .kanban-column, .kanban-card,
 .wb-tool-palette, #wbZoomLevelDisplay,
-input[type="text"], input[type="password"], input[type="color"], input[type="range"], input[type="file"] {
+input[type="text"], input[type="password"], input[type="color"], input[type="range"], input[type="file"],
+.chat-sidebar, .channel-list-container { /* Added */
     border: 1px solid var(--border-color);
 }
 .sidebar-navigation, .app-header,
@@ -148,7 +151,8 @@ button,
 #audioChatSection.content-section,
 .section-pane, .app-header, .header-context-area,
 #chatSection.content-section .chat-main, #videoChatContainer, .remote-video-wrapper,
-.kanban-column, .kanban-cards {
+.kanban-column, .kanban-cards,
+.chat-sidebar, .channel-management, .add-channel-controls { /* Added */
     display: flex;
     flex-direction: column;
 }
@@ -158,7 +162,8 @@ button,
 .whiteboard-controls.button-group, .wb-tool-palette,
 .kanban-board, .document-management-bar, #documentList, .document-actions,
 .document-formatting-controls, .chat-input-area, .kanban-column h3, .kanban-card,
-.room-info-display p, .theme-switch {
+.room-info-display p, .theme-switch,
+.channel-list-item { /* Added */
     display: flex;
 }
 .sidebar-button { 
@@ -413,7 +418,8 @@ button:disabled {
 }
 #chatSection.content-section .chat-section-content {
   display: grid;
-  grid-template-columns: 2.5fr 1fr; 
+  /* grid-template-columns: 2.5fr 1fr; /* Original */
+  grid-template-columns: minmax(0, 3fr) minmax(200px, 1fr); /* Adjusted for sidebar */
   gap: var(--space-md);
   flex: 1; 
   min-height: 0; 
@@ -430,11 +436,96 @@ button:disabled {
   overflow-y: auto;
   padding-right: var(--space-sm); 
 }
-#chatSection.content-section .user-list-sidebar {
+#chatSection.content-section .chat-sidebar { /* MODIFIED from .user-list-sidebar */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
   background-color: var(--bg-secondary);
   padding: var(--space-md);
-  height: fit-content; 
+  /* border: 1px solid var(--border-color); */ /* border moved to parent */
+  /* border-radius: var(--radius-md); */ /* border-radius moved to parent */
 }
+/* NEW CSS for Channels */
+.channel-management h3, .chat-sidebar .user-list-sidebar h3 { /* STYLED H3s */
+  margin-top: 0;
+  margin-bottom: var(--space-sm);
+  font-size: 1rem;
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.channel-list-container {
+  max-height: 200px; /* Or adjust as needed */
+  overflow-y: auto;
+  margin-bottom: var(--space-md);
+  /* border: 1px solid var(--border-color); */ /* border moved to parent */
+  /* border-radius: var(--radius-sm); */ /* border-radius moved to parent */
+  background-color: var(--bg-card);
+  flex-grow: 1; /* Allow to take space */
+}
+
+.channel-list-item {
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.9em;
+  /* position: relative; */ /* For notification dot - handled by flex */
+  /* display: flex; */ /* For aligning text and dot - Already set on .app-wrapper */
+  justify-content: space-between; /* For aligning text and dot */
+  align-items: center; /* For aligning text and dot */
+}
+.channel-list-item:last-child {
+  border-bottom: none;
+}
+.channel-list-item:hover {
+  background-color: var(--user-hover);
+}
+.channel-list-item.active {
+  background-color: var(--accent-color);
+  color: white;
+  font-weight: 600;
+}
+.channel-list-item.active:hover {
+  background-color: var(--accent-hover);
+}
+
+.channel-notification-dot {
+  width: 8px; height: 8px;
+  background-color: var(--notification-dot-color);
+  border-radius: 50%;
+  flex-shrink: 0; /* Prevent dot from shrinking */
+  margin-left: var(--space-sm);
+}
+.channel-list-item.active .channel-notification-dot {
+    background-color: white; /* Make dot visible on active background */
+}
+
+.add-channel-controls {
+  /* display: flex; */ /* Set by general rule */
+  /* flex-direction: column; */ /* Set by general rule */
+  gap: var(--space-sm);
+  margin-top: auto; /* Push to bottom if channel list is short */
+}
+.add-channel-controls input[type="text"] {
+  width: 100%;
+  margin-bottom: 0; /* Remove default margin */
+}
+.add-channel-controls button {
+  width: 100%;
+}
+
+.chat-sidebar .user-list-sidebar { /* Original user list, now nested */
+    padding: 0; 
+    border: none; 
+    background-color: transparent; 
+    border-radius: 0;
+    /* height: fit-content; */ /* Removed, let flex handle it */
+    /* box-shadow: none; */
+    flex-shrink: 0; /* Don't let it shrink too much */
+}
+/* END NEW CSS for Channels */
+
+
 #userList {
   list-style-type: none;
   max-height: 300px; 
@@ -758,8 +849,12 @@ button:disabled {
 
 @media (max-width: 900px) {
   :root { --sidebar-width: 170px; }
-  #chatSection.content-section .chat-section-content { grid-template-columns: 1fr; }
-  #chatSection.content-section .user-list-sidebar { margin-top: var(--space-md); }
+  #chatSection.content-section .chat-section-content {
+    grid-template-columns: 1fr; /* MODIFIED: Stack main chat and sidebar */
+  }
+  .chat-sidebar { /* NEW */
+    margin-top: var(--space-md); 
+  }
   .sidebar-button span:not(.icon):not(.notification-dot) { font-size: 0.85em; }
   .remote-videos-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
   #localVideoContainer { max-width: 280px; }
@@ -928,10 +1023,24 @@ button:disabled {
                             <button id="sendMessageBtn">Send</button>
                         </div>
                     </div>
-                    <div class="user-list-sidebar">
-                         <h3>Users Online</h3>
-                         <ul id="userList"></ul>
+                    <!-- MODIFIED: Chat Sidebar for Channels and Users -->
+                    <div class="chat-sidebar">
+                        <div class="channel-management">
+                            <h3>Channels</h3>
+                            <div id="channelList" class="channel-list-container">
+                                <!-- Channel items will be populated here by JS -->
+                            </div>
+                            <div class="add-channel-controls">
+                                <input type="text" id="newChannelNameInput" placeholder="#new-channel-name">
+                                <button id="addChannelBtn">Create Channel</button>
+                            </div>
+                        </div>
+                        <div class="user-list-sidebar"> <!-- User list is now inside chat-sidebar -->
+                             <h3>Users Online</h3>
+                             <ul id="userList"></ul>
+                        </div>
                     </div>
+                    <!-- END MODIFICATION -->
                 </div>
             </div>
 

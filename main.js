@@ -2,7 +2,7 @@ import { joinRoom, selfId as localGeneratedPeerId } from './trystero-torrent.min
 import { initShareFeatures, getShareableData, loadShareableData, resetShareModuleStates, setShareModulePeerInfo, handleShareModulePeerLeave } from './share.js';
 import { initMediaFeatures, handleMediaPeerStream, stopAllLocalMedia, setupMediaForNewPeer, cleanupMediaForPeer } from './media.js';
 
-const APP_ID = 'PeerSuite-0.0.9-newpaint';
+const APP_ID = 'PeerSuite-0.0.9-newpaint-channels'; // Updated APP_ID
 
 const wordList = [
     "able", "acid", "army", "away", "baby", "back", "ball", "band", "bank", "base",
@@ -48,7 +48,7 @@ let peerNicknames = {}; // { peerId: nickname }
 let isHost = false;
 let importedWorkspaceState = null;
 
-// Trystero action send/receive function pairs - to be initialized in joinRoomAndSetup
+// Trystero action send/receive function pairs
 let sendChatMessage, onChatMessage, sendNickname, onNickname, sendPrivateMessage, onPrivateMessage;
 let sendFileMeta, onFileMeta, sendFileChunk, onFileChunk;
 let sendDrawCommand, onDrawCommand, sendInitialWhiteboard, onInitialWhiteboard;
@@ -59,6 +59,8 @@ let sendCreateDocument, onCreateDocument;
 let sendRenameDocument, onRenameDocument;
 let sendDeleteDocument, onDeleteDocument;
 let sendDocumentContentUpdate, onDocumentContentUpdate;
+let sendCreateChannel, onCreateChannel; // ADDED for channels
+let sendInitialChannels, onInitialChannels; // ADDED for channels
 
 const CRYPTO_ALGO = 'AES-GCM';
 const textEncoder = new TextEncoder();
@@ -70,7 +72,7 @@ function initTheme() {
     document.documentElement.setAttribute('data-theme', savedTheme);
     if (themeToggle) themeToggle.checked = savedTheme === 'dark';
 
-    const wbModule = window.shareModuleRef;
+    const wbModule = window.shareModuleRef; // shareModuleRef might not exist yet
     if (wbModule && wbModule.redrawWhiteboardFromHistoryIfVisible) {
         wbModule.redrawWhiteboardFromHistoryIfVisible();
     }
@@ -123,7 +125,7 @@ sidebarButtons.forEach(button => {
 function showNotification(sectionId) {
     const targetSectionElement = document.getElementById(sectionId);
     if (sectionId === currentActiveSection && targetSectionElement && !targetSectionElement.classList.contains('hidden')) {
-        return;
+        return; // Don't show if section is already active and visible
     }
     const dot = document.querySelector(`.notification-dot[data-notification-for="${sectionId}"]`);
     if (dot) dot.classList.remove('hidden');
@@ -203,12 +205,12 @@ if (exportWorkspaceBtnSidebar) {
 
         try {
             logStatus("Exporting workspace...");
-            const shareData = getShareableData();
+            const shareData = getShareableData(); // This will now include channels
 
             const workspaceState = {
                 ...shareData,
                 roomId: currentRoomId,
-                version: APP_ID
+                version: APP_ID // Use updated APP_ID
             };
             const serializedState = JSON.stringify(workspaceState);
             const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -247,7 +249,8 @@ if (importFilePicker) {
                 typeof importedWorkspaceState.kanbanData === 'undefined' ||
                 typeof importedWorkspaceState.whiteboardHistory === 'undefined' ||
                 typeof importedWorkspaceState.documents === 'undefined' ||
-                typeof importedWorkspaceState.currentActiveDocumentId === 'undefined'
+                typeof importedWorkspaceState.currentActiveDocumentId === 'undefined' ||
+                typeof importedWorkspaceState.channels === 'undefined' // Check for channels
             ) {
                 throw new Error("Invalid or incomplete workspace file structure.");
             }
@@ -324,6 +327,7 @@ async function joinRoomAndSetup() {
         roomApi = await joinRoom(config, currentRoomId);
         logStatus(`Joined workspace: ${currentRoomId}. My Peer ID: ${localGeneratedPeerId.substring(0, 8)}`);
 
+        // Initialize Trystero actions
         [sendChatMessage, onChatMessage] = roomApi.makeAction('chatMsg');
         [sendNickname, onNickname] = roomApi.makeAction('nick');
         [sendPrivateMessage, onPrivateMessage] = roomApi.makeAction('privMsg');
@@ -339,12 +343,16 @@ async function joinRoomAndSetup() {
         [sendRenameDocument, onRenameDocument] = roomApi.makeAction('renDoc');
         [sendDeleteDocument, onDeleteDocument] = roomApi.makeAction('delDoc');
         [sendDocumentContentUpdate, onDocumentContentUpdate] = roomApi.makeAction('docUpd');
+        [sendCreateChannel, onCreateChannel] = roomApi.makeAction('createChan'); // ADDED
+        [sendInitialChannels, onInitialChannels] = roomApi.makeAction('initChans'); // ADDED
 
         const shareModuleDeps = {
             sendChatMessage, sendPrivateMessage, sendFileMeta, sendFileChunk,
             sendDrawCommand, sendInitialWhiteboard, sendKanbanUpdate, sendInitialKanban,
             sendChatHistory, sendInitialDocuments, sendCreateDocument, sendRenameDocument,
             sendDeleteDocument, sendDocumentContentUpdate,
+            sendCreateChannel, onCreateChannel, // ADDED
+            sendInitialChannels, onInitialChannels, // ADDED
             logStatus, showNotification,
             localGeneratedPeerId,
             getPeerNicknames: () => peerNicknames,
@@ -365,17 +373,18 @@ async function joinRoomAndSetup() {
         window.mediaModuleRef = initMediaFeatures(mediaModuleDeps);
 
         if (importedWorkspaceState && isHost) {
-            loadShareableData(importedWorkspaceState); // This now calls into share.js
+            // loadShareableData now correctly handles channels if present in importedWorkspaceState
+            loadShareableData(importedWorkspaceState);
             logStatus("Imported workspace state applied for hosting.");
-            importedWorkspaceState = null;
+            importedWorkspaceState = null; // Clear after loading
         } else if (isHost && window.shareModuleRef.ensureDefaultDocument) {
             window.shareModuleRef.ensureDefaultDocument();
         }
         
-        if (window.shareModuleRef.displayInitialChatHistory) {
-            window.shareModuleRef.displayInitialChatHistory();
-        }
-
+        // The displayInitialChatHistory call is removed from here.
+        // share.js's initShareFeatures now handles initial display logic for channels and chat.
+        
+        // Setup Trystero listeners
         onChatMessage((data, peerId) => window.shareModuleRef.handleChatMessage(data, peerId));
         onPrivateMessage((data, peerId) => window.shareModuleRef.handlePrivateMessage(data, peerId));
         onFileMeta((data, peerId) => window.shareModuleRef.handleFileMeta(data, peerId));
@@ -390,6 +399,8 @@ async function joinRoomAndSetup() {
         onRenameDocument((data, peerId) => window.shareModuleRef.handleRenameDocument(data, peerId));
         onDeleteDocument((data, peerId) => window.shareModuleRef.handleDeleteDocument(data, peerId));
         onDocumentContentUpdate((data, peerId) => window.shareModuleRef.handleDocumentContentUpdate(data, peerId));
+        onCreateChannel((data, peerId) => window.shareModuleRef.handleCreateChannel(data, peerId)); // ADDED
+        onInitialChannels((data, peerId) => window.shareModuleRef.handleInitialChannels(data, peerId)); // ADDED
 
         onNickname(async (nicknameData, peerId) => {
             const { nickname, initialJoin, isHost: peerIsHost } = nicknameData;
@@ -400,9 +411,7 @@ async function joinRoomAndSetup() {
             if (initialJoin && oldNickname !== nickname) {
                 if(window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`${nickname}${peerIsHost ? ' (Host)' : ''} has joined.`);
                 if (sendNickname) await sendNickname({ nickname: localNickname, initialJoin: false, isHost: isHost }, peerId);
-                if (isHost && window.shareModuleRef.sendFullStateToPeer) {
-                    window.shareModuleRef.sendFullStateToPeer(peerId);
-                }
+                // sendFullStateToPeer is now called in onPeerJoin
             } else if (oldNickname && oldNickname !== nickname) {
                  if(window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`${oldNickname} is now known as ${nickname}.`);
             }
@@ -414,10 +423,13 @@ async function joinRoomAndSetup() {
 
         roomApi.onPeerJoin(async (joinedPeerId) => {
             logStatus(`Peer ${joinedPeerId.substring(0, 8)}... joined.`);
+            // It's important to send nickname first, so the host knows who to send full state to.
             if (sendNickname) await sendNickname({ nickname: localNickname, initialJoin: true, isHost: isHost }, joinedPeerId);
             
             if (window.mediaModuleRef && typeof setupMediaForNewPeer === 'function') setupMediaForNewPeer(joinedPeerId);
 
+            // Host sends full state after receiving the new peer's nickname (implicitly handled by Trystero, but good to be aware)
+            // Or, more robustly, send full state here assuming the new peer will soon send their nickname.
             if (isHost && window.shareModuleRef && window.shareModuleRef.sendFullStateToPeer) { 
                  window.shareModuleRef.sendFullStateToPeer(joinedPeerId);
             }
@@ -442,7 +454,9 @@ async function joinRoomAndSetup() {
         if(inRoomInterface) inRoomInterface.classList.remove('hidden');
         if(currentRoomCodeSpan) currentRoomCodeSpan.textContent = currentRoomId;
         if(currentNicknameSpan) currentNicknameSpan.textContent = localNickname;
-        if(window.shareModuleRef && window.shareModuleRef.updateChatMessageInputPlaceholder) window.shareModuleRef.updateChatMessageInputPlaceholder(currentRoomId);
+        
+        // updateChatMessageInputPlaceholder is now handled by share.js's setActiveChannel
+        // if(window.shareModuleRef && window.shareModuleRef.updateChatMessageInputPlaceholder) window.shareModuleRef.updateChatMessageInputPlaceholder(currentRoomId);
 
         if(joinLeaveRoomBtn) { joinLeaveRoomBtn.textContent = 'Leave Workspace'; joinLeaveRoomBtn.disabled = false; }
 
@@ -455,22 +469,22 @@ async function joinRoomAndSetup() {
         if(window.shareModuleRef && window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`You joined workspace: ${currentRoomId} as ${localNickname}${isHost ? ' (Host)' : ''}.`);
 
         const shareModule = window.shareModuleRef;
-        if (shareModule) {
+        if (shareModule) { // Ensure shareModule is initialized
             if (currentActiveSection === 'whiteboardSection' && shareModule.resizeWhiteboardAndRedraw) {
                  shareModule.resizeWhiteboardAndRedraw();
-            } else if (shareModule.redrawWhiteboardFromHistoryIfVisible) {
-                shareModule.redrawWhiteboardFromHistoryIfVisible(true);
+            } else if (shareModule.redrawWhiteboardFromHistoryIfVisible) { // Ensure it redraws if not initially active
+                shareModule.redrawWhiteboardFromHistoryIfVisible(true); // Force redraw if necessary
             }
 
             if (currentActiveSection === 'kanbanSection' && shareModule.renderKanbanBoardIfActive) {
                 shareModule.renderKanbanBoardIfActive();
             } else if (shareModule.renderKanbanBoardIfActive) {
-                 shareModule.renderKanbanBoardIfActive(true);
+                 shareModule.renderKanbanBoardIfActive(true); // Force render
             }
             if (currentActiveSection === 'documentsSection' && shareModule.renderDocumentsIfActive) {
                  shareModule.renderDocumentsIfActive();
             } else if (shareModule.renderDocumentsIfActive) {
-                shareModule.renderDocumentsIfActive(true);
+                shareModule.renderDocumentsIfActive(true); // Force render
             }
         }
 
@@ -490,6 +504,7 @@ async function leaveRoomAndCleanup() {
         catch (e) { console.warn("Error leaving room:", e); }
     }
     roomApi = null;
+    // Nullify all Trystero actions
     sendChatMessage = onChatMessage = sendNickname = onNickname = sendPrivateMessage = onPrivateMessage = null;
     sendFileMeta = onFileMeta = sendFileChunk = onFileChunk = null;
     sendDrawCommand = onDrawCommand = sendInitialWhiteboard = onInitialWhiteboard = null;
@@ -498,6 +513,8 @@ async function leaveRoomAndCleanup() {
     sendInitialDocuments = onInitialDocuments = sendCreateDocument = onCreateDocument = null;
     sendRenameDocument = onRenameDocument = sendDeleteDocument = onDeleteDocument = null;
     sendDocumentContentUpdate = onDocumentContentUpdate = null;
+    sendCreateChannel = onCreateChannel = null; // ADDED
+    sendInitialChannels = onInitialChannels = null; // ADDED
 
     resetToSetupState();
 }
@@ -516,6 +533,7 @@ function resetToSetupState() {
 
 
     if (window.mediaModuleRef && window.mediaModuleRef.resetMediaUIAndState) window.mediaModuleRef.resetMediaUIAndState();
+    // resetShareModuleStates will now handle channel UI reset as well
     if (window.shareModuleRef && typeof resetShareModuleStates === 'function') {
         resetShareModuleStates();
         if (window.shareModuleRef.hideEmojiPicker) window.shareModuleRef.hideEmojiPicker();
@@ -548,8 +566,10 @@ function resetToSetupState() {
 if (createPartyBtn) {
     createPartyBtn.addEventListener('click', () => {
         isHost = true;
+        // If importing, share.js->loadShareableData will handle it.
+        // If not importing, share.js->initShareFeatures->resetShareModuleStates will clear and then _createAndBroadcastChannel will make #general.
         if (!importedWorkspaceState && window.shareModuleRef && typeof resetShareModuleStates === 'function') {
-             resetShareModuleStates(true);
+             resetShareModuleStates(true); // True indicates host creation, though share.js doesn't use this param currently
         }
         joinRoomAndSetup();
     });
@@ -594,7 +614,7 @@ if (nicknameInput) {
     });
 }
 
-// Check browser capabilities (media module handles button states)
+// Check browser capabilities
 if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
     console.warn("Screen sharing not supported by your browser.");
 }
@@ -604,6 +624,7 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 
 // Initial state
 resetToSetupState();
-if (window.shareModuleRef && window.shareModuleRef.initializeEmojiPicker) {
-    window.shareModuleRef.initializeEmojiPicker();
-}
+// initializeEmojiPicker is now called within share.js's initShareFeatures->initChat
+// if (window.shareModuleRef && window.shareModuleRef.initializeEmojiPicker) {
+//     window.shareModuleRef.initializeEmojiPicker();
+// }
