@@ -51,6 +51,11 @@
   --shadow-md: 0 2px 4px rgba(0,0,0,0.05);
   --shadow-lg: 0 4px 8px rgba(0,0,0,0.07);
   --sidebar-width: 200px;
+
+  --priority-low: #66bb6a; /* Light Green */
+  --priority-medium: #ffee58; /* Light Yellow */
+  --priority-high: #ef5350; /* Light Red (var secondary) */
+  --priority-critical: #ab47bc; /* Light Purple */
 }
 [data-theme="dark"] {
   --bg-primary: #222222; 
@@ -72,6 +77,11 @@
   --user-hover: #3a3a3a;
   --file-message-bg: #27304d;
   --notification-dot-color: var(--primary);
+
+  --priority-low: #388e3c; /* Darker Green */
+  --priority-medium: #f9a825; /* Darker Yellow */
+  --priority-high: #d32f2f; /* Darker Red */
+  --priority-critical: #7b1fa2; /* Darker Purple */
 }
 * {
   box-sizing: border-box;
@@ -80,7 +90,7 @@
   padding: 0;
   user-select: none;
 }
-.message, #collaborativeEditor, input[type="text"], input[type="password"] {
+.message, #collaborativeEditor, input[type="text"], input[type="password"], textarea, .new-card-text-input {
   user-select: text;
 }
 html {
@@ -101,7 +111,7 @@ body {
 }
 .sidebar-button,
 #status, #audioChatStatus.status-message-bar,
-input[type="text"], input[type="password"], input[type="color"], input[type="range"], input[type="file"],
+input[type="text"], input[type="password"], input[type="color"], input[type="range"], input[type="file"], textarea,
 button,
 .remoteVideoContainer,
 .message,
@@ -111,24 +121,24 @@ button,
 #userList, .emoji-picker-popup, .kanban-column, .kanban-card,
 .theme-switch-track, .maximize-btn,
 #localVideo, .remote-video-wrapper video,
-.channel-list-item { /* Added */
+.channel-list-item, .add-card-form { 
     border-radius: var(--radius-sm);
 }
 .setup-controls-container, .section-pane, .chat-main, .user-list-sidebar, .system-message,
-.chat-sidebar, .channel-list-container { /* Added */
+.chat-sidebar, .channel-list-container { 
     border-radius: var(--radius-md);
 }
 .section-pane, .chat-main, .user-list-sidebar,
 
-#kanbanBoard,
+#kanbanBoard, /* Kanban Board itself still has border */
 .localVideoContainer, .remote-video-wrapper,
 .document-management-bar, .document-formatting-controls, #collaborativeEditor,
 .remoteVideoContainer,
 .message, .system-message,
 #userList, .kanban-column, .kanban-card,
 .wb-tool-palette, #wbZoomLevelDisplay,
-input[type="text"], input[type="password"], input[type="color"], input[type="range"], input[type="file"],
-.chat-sidebar, .channel-list-container { /* Added */
+input[type="text"], input[type="password"], input[type="color"], input[type="range"], input[type="file"], textarea,
+.chat-sidebar, .channel-list-container, .add-card-form { 
     border: 1px solid var(--border-color);
 }
 .sidebar-navigation, .app-header,
@@ -136,7 +146,6 @@ input[type="text"], input[type="password"], input[type="color"], input[type="ran
 .section-pane > .sharing-controls, .section-pane > .video-chat-controls, .section-pane > .audio-chat-controls,
 .chat-main, .user-list-sidebar,
 
- #kanbanBoard,
 .localVideoContainer, .remote-video-wrapper,
 .document-management-bar, .document-actions button, .document-formatting-controls, #collaborativeEditor,
 button,
@@ -151,8 +160,8 @@ button,
 #audioChatSection.content-section,
 .section-pane, .app-header, .header-context-area,
 #chatSection.content-section .chat-main, #videoChatContainer, .remote-video-wrapper,
-.kanban-column, .kanban-cards,
-.chat-sidebar, .channel-management, .add-channel-controls { /* Added */
+.kanban-column, .kanban-cards, .kanban-card-content,
+.chat-sidebar, .channel-management, .add-channel-controls { 
     display: flex;
     flex-direction: column;
 }
@@ -160,10 +169,11 @@ button,
 .app-header h1, #headerRoomInfoDisplay.room-info-display,
 #headerRoomInfoDisplay.room-info-display span:not(.room-info-separator),
 .whiteboard-controls.button-group, .wb-tool-palette,
-.kanban-board, .document-management-bar, #documentList, .document-actions,
+.kanban-board, /* This is for horizontal layout on desktop */
+.document-management-bar, #documentList, .document-actions,
 .document-formatting-controls, .chat-input-area, .kanban-column h3, .kanban-card,
 .room-info-display p, .theme-switch,
-.channel-list-item { /* Added */
+.channel-list-item, .add-card-form-actions { 
     display: flex;
 }
 .sidebar-button { 
@@ -311,7 +321,7 @@ label {
 .content-section {
     gap: var(--space-md);
     flex-grow: 1;
-    min-height: 0;
+    min-height: 0; 
     align-self: stretch; 
 }
 .section-pane {
@@ -320,7 +330,8 @@ label {
   width: 100%; 
   flex: 1; 
   gap: var(--space-md);
-  min-height: 0;
+  min-height: 0; 
+  overflow: hidden; 
 }
 .section-pane > .whiteboard-controls,
 .section-pane > .kanban-controls,
@@ -332,6 +343,7 @@ label {
   border-radius: 0;
   border: none;
   margin-bottom: 0; 
+  flex-shrink: 0; 
 }
 
 .section-pane > .whiteboard-canvas-container {
@@ -347,20 +359,32 @@ label {
   border-radius: var(--radius-md); 
 }
 .section-pane > #videoChatContainer, 
-.section-pane > #remoteVideosContainer,
-.section-pane > #kanbanBoard {
+.section-pane > #remoteVideosContainer {
   flex-grow: 1;
-  min-height: 0;
+  min-height: 0; 
+  overflow-y: auto; 
 }
-.section-pane > #kanbanBoard {
+
+/* Kanban Section Specific Scroll Control */
+#kanbanSection.section-pane { /* Target the Kanban section pane directly */
+    overflow-y: auto; /* Allow the entire Kanban pane to scroll vertically if needed */
+}
+.section-pane > #kanbanBoard { /* The direct child of section-pane */
+  flex-grow: 1;
+  min-height: 0; 
+  /* overflow-y: auto; /* REMOVED - Let #kanbanSection handle overall scroll */
+  /* overflow-x: auto; /* REMOVED for mobile, handled in media query */
   background-color: var(--bg-primary);
   width: 100%;
+  /* border: none; */ /* Keep border for the #kanbanBoard container */
 }
+
+
 input[type="text"],
 input[type="password"],
 input[type="color"],
 input[type="range"],
-input[type="file"] {
+input[type="file"], textarea {
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-md);
   font-size: 0.95rem;
@@ -369,16 +393,17 @@ input[type="file"] {
 }
 input[type="text"], input[type="password"] { height: 34px; width: 100%; }
 input[type="file"] { padding: var(--space-xs); } 
+textarea { width: 100%; min-height: 60px; resize: vertical; }
 input[type="text"]:focus,
 input[type="password"]:focus,
 input[type="color"]:focus,
-input[type="range"]:focus {
+input[type="range"]:focus, textarea:focus {
   outline: none;
   border-color: var(--accent-color);
   box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15); 
 }
 input[type="text"]::placeholder,
-input[type="password"]::placeholder {
+input[type="password"]::placeholder, textarea::placeholder {
   color: var(--text-secondary);
   opacity: 0.8;
 }
@@ -418,8 +443,7 @@ button:disabled {
 }
 #chatSection.content-section .chat-section-content {
   display: grid;
-  /* grid-template-columns: 2.5fr 1fr; /* Original */
-  grid-template-columns: minmax(0, 3fr) minmax(200px, 1fr); /* Adjusted for sidebar */
+  grid-template-columns: minmax(0, 3fr) minmax(200px, 1fr); 
   gap: var(--space-md);
   flex: 1; 
   min-height: 0; 
@@ -436,17 +460,15 @@ button:disabled {
   overflow-y: auto;
   padding-right: var(--space-sm); 
 }
-#chatSection.content-section .chat-sidebar { /* MODIFIED from .user-list-sidebar */
+#chatSection.content-section .chat-sidebar {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
   background-color: var(--bg-secondary);
   padding: var(--space-md);
-  /* border: 1px solid var(--border-color); */ /* border moved to parent */
-  /* border-radius: var(--radius-md); */ /* border-radius moved to parent */
 }
-/* NEW CSS for Channels */
-.channel-management h3, .chat-sidebar .user-list-sidebar h3 { /* STYLED H3s */
+
+.channel-management h3, .chat-sidebar .user-list-sidebar h3 {
   margin-top: 0;
   margin-bottom: var(--space-sm);
   font-size: 1rem;
@@ -455,13 +477,11 @@ button:disabled {
 }
 
 .channel-list-container {
-  max-height: 200px; /* Or adjust as needed */
+  max-height: 200px; 
   overflow-y: auto;
   margin-bottom: var(--space-md);
-  /* border: 1px solid var(--border-color); */ /* border moved to parent */
-  /* border-radius: var(--radius-sm); */ /* border-radius moved to parent */
   background-color: var(--bg-card);
-  flex-grow: 1; /* Allow to take space */
+  flex-grow: 1; 
 }
 
 .channel-list-item {
@@ -469,10 +489,8 @@ button:disabled {
   cursor: pointer;
   border-bottom: 1px solid var(--border-color);
   font-size: 0.9em;
-  /* position: relative; */ /* For notification dot - handled by flex */
-  /* display: flex; */ /* For aligning text and dot - Already set on .app-wrapper */
-  justify-content: space-between; /* For aligning text and dot */
-  align-items: center; /* For aligning text and dot */
+  justify-content: space-between; 
+  align-items: center; 
 }
 .channel-list-item:last-child {
   border-bottom: none;
@@ -493,37 +511,32 @@ button:disabled {
   width: 8px; height: 8px;
   background-color: var(--notification-dot-color);
   border-radius: 50%;
-  flex-shrink: 0; /* Prevent dot from shrinking */
+  flex-shrink: 0; 
   margin-left: var(--space-sm);
 }
 .channel-list-item.active .channel-notification-dot {
-    background-color: white; /* Make dot visible on active background */
+    background-color: white; 
 }
 
 .add-channel-controls {
-  /* display: flex; */ /* Set by general rule */
-  /* flex-direction: column; */ /* Set by general rule */
   gap: var(--space-sm);
-  margin-top: auto; /* Push to bottom if channel list is short */
+  margin-top: auto; 
 }
 .add-channel-controls input[type="text"] {
   width: 100%;
-  margin-bottom: 0; /* Remove default margin */
+  margin-bottom: 0; 
 }
 .add-channel-controls button {
   width: 100%;
 }
 
-.chat-sidebar .user-list-sidebar { /* Original user list, now nested */
+.chat-sidebar .user-list-sidebar { 
     padding: 0; 
     border: none; 
     background-color: transparent; 
     border-radius: 0;
-    /* height: fit-content; */ /* Removed, let flex handle it */
-    /* box-shadow: none; */
-    flex-shrink: 0; /* Don't let it shrink too much */
+    flex-shrink: 0; 
 }
-/* END NEW CSS for Channels */
 
 
 #userList {
@@ -665,9 +678,7 @@ button:disabled {
   background-color: #FFFFFF; 
   max-width: 100%; 
   max-height: 100%; 
-
   box-shadow: var(--shadow-sm); 
-
 }
 
 .whiteboard-controls.button-group { 
@@ -712,22 +723,33 @@ button:disabled {
 }
 .whiteboard-controls button, .whiteboard-controls span { margin-bottom: 0; }
 .kanban-controls input[type="text"] { margin-bottom: 0; height: 34px; padding: var(--space-sm) var(--space-md); }
-.kanban-board {
+
+.kanban-board { /* Desktop: horizontal scroll for columns */
+  display: flex; /* Re-ensure flex for desktop */
+  flex-direction: row; /* Horizontal columns for desktop */
   gap: var(--space-md);
   overflow-x: auto; 
+  overflow-y: hidden; 
   padding-bottom: var(--space-md); 
-  min-height: 400px; 
+  min-height: 0; 
   padding: var(--space-md);
   flex-grow: 1; 
 }
 .kanban-column {
   background-color: var(--bg-secondary);
-  padding: var(--space-md); width: 280px; flex-shrink: 0; 
+  padding: var(--space-md); 
+  width: 280px; 
+  flex-shrink: 0; 
+  max-height: 100%; 
+  overflow: hidden; 
+  display: flex; /* Added for column's internal flex layout */
+  flex-direction: column; /* Added for column's internal flex layout */
 }
 .kanban-column h3 {
   font-size: 1rem; margin-bottom: var(--space-md);
   padding-bottom: var(--space-sm); border-bottom: 1px solid var(--border-color);
   justify-content: space-between; align-items: center;
+  flex-shrink: 0; 
 }
 .delete-column-btn {
   background: transparent; color: var(--danger-color); padding: var(--space-xs);
@@ -735,35 +757,101 @@ button:disabled {
 }
 .delete-column-btn:hover { color: var(--danger-hover); background: transparent; opacity: 1; }
 .kanban-cards {
-  min-height: 150px; gap: var(--space-md);
-  flex-grow: 1; overflow-y: auto; padding: var(--space-xs);
+  min-height: 100px; 
+  gap: var(--space-md);
+  flex-grow: 1; 
+  overflow-y: auto; 
+  padding: var(--space-xs);
+  /* max-height: calc(100% - 40px - 1.1rem - var(--space-md) - var(--space-md)); /* Removed for simplicity, rely on flex-grow */
 }
 .kanban-card {
   background-color: var(--bg-card); padding: var(--space-md);
   cursor: grab;
   justify-content: space-between; align-items: flex-start;
+  border-left: 4px solid transparent; 
 }
 .kanban-card:active { cursor: grabbing; }
-.kanban-card p { margin: 0; font-size: 0.9rem; word-break: break-word; flex-grow: 1; }
+.kanban-card-content {
+  flex-grow: 1;
+  margin-right: var(--space-sm); 
+}
+.kanban-card-content p { margin: 0 0 var(--space-sm) 0; font-size: 0.9rem; word-break: break-word; }
+.kanban-card-priority {
+    margin-top: var(--space-sm);
+    padding: var(--space-xs);
+    font-size: 0.8em;
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    max-width: 100px; 
+}
+.kanban-card.priority-1 { border-left-color: var(--priority-low); }
+.kanban-card.priority-2 { border-left-color: var(--priority-medium); }
+.kanban-card.priority-3 { border-left-color: var(--priority-high); }
+.kanban-card.priority-4 { border-left-color: var(--priority-critical); }
+
 .delete-card-btn {
   background: transparent; color: var(--text-secondary); padding: 0;
-  margin-left: var(--space-sm); font-size: 0.85rem;
+  font-size: 0.85rem;
   line-height: 1; opacity: 0.5;
+  flex-shrink: 0; 
 }
 .delete-card-btn:hover { color: var(--danger-color); background: transparent; opacity: 1; }
+.kanban-column .add-card-btn, .kanban-column .add-card-form { 
+  margin-top: auto; 
+  padding-top: var(--space-sm);
+  flex-shrink: 0; 
+}
+
 .kanban-column .add-card-btn {
-  margin-top: auto; padding-top: var(--space-sm);
   background-color: transparent; color: var(--accent-color);
   border: 1px dashed var(--accent-color);
   font-weight: 500; opacity: 0.8; height: 32px; margin-top: var(--space-md);
+  width: 100%;
 }
 .kanban-column .add-card-btn:hover { background-color: rgba(0,120,215,0.1); color: var(--accent-color); border-style: solid; opacity: 1; }
+
+.add-card-form {
+    margin-top: var(--space-md);
+    padding: var(--space-sm);
+    background-color: var(--bg-primary); 
+    gap: var(--space-sm);
+}
+.add-card-form textarea.new-card-text-input {
+    width: 100%;
+    min-height: 60px;
+    padding: var(--space-sm);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    resize: vertical;
+    background-color: var(--bg-card); 
+    color: var(--text-primary);
+    margin-bottom: 0; 
+}
+.add-card-form-actions {
+    gap: var(--space-sm);
+    justify-content: flex-end;
+}
+.add-card-form button {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.85rem;
+    height: auto;
+}
+.add-card-form .cancel-add-card-btn {
+    background-color: var(--text-secondary);
+}
+.add-card-form .cancel-add-card-btn:hover {
+    background-color: var(--gray);
+}
+
 .kanban-card.dragging { opacity: 0.5; border: 1px dashed var(--accent-color); }
 .kanban-column.drag-over { background-color: var(--user-hover); border-style: dashed; }
 .document-management-bar {
   align-items: center; gap: var(--space-md); padding: var(--space-sm);
   background-color: var(--bg-secondary);
   flex-wrap: wrap; 
+  flex-shrink: 0; 
 }
 .document-management-bar h3 { margin: 0; font-size: 0.95rem; color: var(--text-primary); }
 #documentList {
@@ -788,6 +876,7 @@ button:disabled {
 .document-formatting-controls {
   background-color: var(--bg-secondary); padding: var(--space-sm);
   gap: var(--space-sm);
+  flex-shrink: 0; 
 }
 .document-formatting-controls button { padding: var(--space-xs) var(--space-sm); font-size: 0.9rem; margin-right: 2px; }
 #collaborativeEditor {
@@ -795,7 +884,7 @@ button:disabled {
   background-color: var(--bg-card);
   padding: var(--space-lg);
   overflow-y: auto; 
-  min-height: 300px; 
+  min-height: 150px; 
   color: var(--text-primary);
   line-height: 1.7;
   outline: none; 
@@ -850,9 +939,9 @@ button:disabled {
 @media (max-width: 900px) {
   :root { --sidebar-width: 170px; }
   #chatSection.content-section .chat-section-content {
-    grid-template-columns: 1fr; /* MODIFIED: Stack main chat and sidebar */
+    grid-template-columns: 1fr; 
   }
-  .chat-sidebar { /* NEW */
+  .chat-sidebar { 
     margin-top: var(--space-md); 
   }
   .sidebar-button span:not(.icon):not(.notification-dot) { font-size: 0.85em; }
@@ -888,6 +977,37 @@ button:disabled {
   .document-management-bar { flex-direction: column; align-items: flex-start; }
   .document-actions { margin-left: 0; margin-top: var(--space-sm); width: 100%; justify-content: space-around; }
   .header-context-area { font-size: 0.8em; }
+
+  /* Kanban specific adjustments for mobile */
+  #kanbanSection.section-pane { /* Already has overflow-y: auto; */
+    padding: var(--space-sm); /* Reduce padding for more space */
+  }
+  .section-pane > #kanbanBoard {
+    /* This element is the one inside #kanbanSection that holds .kanban-board */
+    /* It should allow its child (.kanban-board) to define its own layout */
+    overflow-x: hidden; /* No horizontal scroll for this intermediate container */
+    overflow-y: visible; /* Let .kanban-board or its parent (#kanbanSection) handle scroll */
+    /* border: none; /* Remove border if it's just a wrapper now */
+  }
+  .kanban-board {
+    flex-direction: column; /* Stack columns vertically */
+    align-items: stretch; /* Make columns take full width */
+    height: auto; 
+    overflow-x: hidden; 
+    /* overflow-y: visible; Let #kanbanSection scroll */
+    gap: var(--space-sm);
+    /* display: block; /* Alternative to flex for simple stacking */
+  }
+  .kanban-column {
+    width: auto; 
+    max-height: none; 
+    min-height: 200px; 
+    flex-shrink: 1; 
+    margin-bottom: var(--space-md); /* Add space between stacked columns */
+  }
+  .kanban-cards {
+    max-height: 50vh; /* Increased slightly, adjust as needed */
+  }
 }
 @media (max-width: 600px) {
   .button-group:not(.whiteboard-controls):not(.document-formatting-controls) { 
@@ -899,8 +1019,6 @@ button:disabled {
   .chat-input-area input[type=text] { padding-right: 100px; }
   .emoji-icon { right: calc(55px + var(--space-xs)); }
   .file-attach-icon { right: calc(55px + var(--space-xs) + 18px + var(--space-xs)); }
-  .kanban-board { flex-direction: column; align-items: stretch; height: auto; max-height: 60vh; }
-  .kanban-column { width: auto; }
   .remote-videos-grid { grid-template-columns: 1fr; }
   #localVideoContainer { max-width: 100%; }
   #headerRoomInfoDisplay.room-info-display { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
@@ -1023,24 +1141,21 @@ button:disabled {
                             <button id="sendMessageBtn">Send</button>
                         </div>
                     </div>
-                    <!-- MODIFIED: Chat Sidebar for Channels and Users -->
                     <div class="chat-sidebar">
                         <div class="channel-management">
                             <h3>Channels</h3>
                             <div id="channelList" class="channel-list-container">
-                                <!-- Channel items will be populated here by JS -->
                             </div>
                             <div class="add-channel-controls">
                                 <input type="text" id="newChannelNameInput" placeholder="#new-channel-name">
                                 <button id="addChannelBtn">Create Channel</button>
                             </div>
                         </div>
-                        <div class="user-list-sidebar"> <!-- User list is now inside chat-sidebar -->
+                        <div class="user-list-sidebar"> 
                              <h3>Users Online</h3>
                              <ul id="userList"></ul>
                         </div>
                     </div>
-                    <!-- END MODIFICATION -->
                 </div>
             </div>
 
@@ -1099,7 +1214,6 @@ button:disabled {
                     <button id="wbClearBtn">Clear Board</button>
 
                 </div>
-                <!-- Canvas is now inside a wrapper -->
                 <div class="whiteboard-canvas-container">
                     <canvas id="whiteboardCanvas" class="whiteboardCanvas" width="640" height="360"></canvas>
                 </div>
