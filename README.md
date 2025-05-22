@@ -12,11 +12,10 @@ The tools included are chat with file sending, collaboarative document editing, 
 
 If this is something you would like to be a part of, please send a PR.
 
-Usage: You can use https://peersuite.space online, download the files and run them yourself, or grab an executable from releases. (Note, I am still learning electron, discovered today (5/13) that you can't add a kanban card in the executable versions) For full featureset until I fix this, use the website.
+Usage: You can use https://peersuite.space online, download a docker image and run peersuite yourself, or grab an executable from releases. 
 
 ## Docker
-
-You can also run Peersuite using Docker.
+ 
 Download from https://hub.docker.com/repository/docker/openconstruct/peersuite   or build instructions below
 
 1.  **Build the Docker image:**
