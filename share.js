@@ -1,29 +1,51 @@
+// --- Chat & File specific globals ---
 let chatHistory = [];
 let incomingFileBuffers = new Map(); // { bufferKey: { meta, chunks, receivedBytes } }
 
-let wbCtx, wbIsDrawing = false, wbLastX, wbLastY;
-let currentWbTool = 'pen';
-let wbShapeStartX, wbShapeStartY;
-let whiteboardHistory = [];
-let wbZoomLevel = 1.0;
-let wbPanX = 0;
-let wbPanY = 0;
-const WB_MIN_ZOOM = 0.2;
-const WB_MAX_ZOOM = 5.0;
-const WB_ZOOM_STEP = 0.2;
+// --- Channel specific globals ---
+let channels = [];
+let currentActiveChannelId = null;
 
-let kanbanData = { columns: [] };
-let draggedCardElement = null;
-let draggedCardData = null;
-let kanbanCurrentlyAddingCardToColumnId = null; // For new add card UI
 
-let documents = [];
-let currentActiveDocumentId = null;
+// --- Imported Sub-Modules ---
+import { 
+    initKanbanFeatures, 
+    getKanbanData, 
+    loadKanbanData, 
+    resetKanbanState, 
+    handleKanbanUpdate as handleKanbanUpdateInternal, 
+    handleInitialKanban as handleInitialKanbanInternal,
+    sendInitialKanbanStateToPeer,
+    renderKanbanBoardIfActive as renderKanbanBoardIfActiveInternal
+} from './kanban.js';
 
-let channels = []; // For chat channels
-let currentActiveChannelId = null; // ID of the active channel
+import { 
+    initWhiteboardFeatures, 
+    getWhiteboardHistory, 
+    loadWhiteboardData, 
+    resetWhiteboardState, 
+    handleDrawCommand as handleDrawCommandInternal, 
+    handleInitialWhiteboard as handleInitialWhiteboardInternal,
+    sendInitialWhiteboardStateToPeer,
+    redrawWhiteboardFromHistoryIfVisible as redrawWhiteboardFromHistoryIfVisibleInternal,
+    resizeWhiteboardAndRedraw as resizeWhiteboardAndRedrawInternal
+} from './whiteboard.js';
 
-// --- Dependencies from main.js (will be set in initShareFeatures) ---
+import { 
+    initDocumentFeatures, 
+    getDocumentShareData, 
+    loadDocumentData, 
+    resetDocumentState,
+    handleInitialDocuments as handleInitialDocumentsInternal,
+    handleCreateDocument as handleCreateDocumentInternal,
+    handleRenameDocument as handleRenameDocumentInternal,
+    handleDeleteDocument as handleDeleteDocumentInternal,
+    handleDocumentContentUpdate as handleDocumentContentUpdateInternal,
+    sendInitialDocumentsStateToPeer,
+    renderDocumentsIfActive as renderDocumentsIfActiveInternal,
+    ensureDefaultDocument as ensureDefaultDocumentInternal
+} from './document.js';
+
 let sendChatMessageDep, sendPrivateMessageDep, sendFileMetaDep, sendFileChunkDep;
 let sendDrawCommandDep, sendInitialWhiteboardDep, sendKanbanUpdateDep, sendInitialKanbanDep;
 let sendChatHistoryDep, sendInitialDocumentsDep, sendCreateDocumentDep, sendRenameDocumentDep;
@@ -37,17 +59,15 @@ let localGeneratedPeerIdDep;
 let getPeerNicknamesDep, getIsHostDep, getLocalNicknameDep, findPeerIdByNicknameDepFnc;
 let currentRoomIdDep;
 
-// --- DOM Elements (selected within this module) ---
+// --- DOM Elements (selected within this module, for chat and channels) ---
 let chatArea, messageInput, sendMessageBtn, emojiIcon, emojiPickerPopup, triggerFileInput, chatFileInput;
 let channelListDiv, newChannelNameInput, addChannelBtn; // For channels
 
-let whiteboardCanvas, wbColorPicker, wbLineWidth, wbClearBtn, wbLineWidthValue, wbToolPalette, wbZoomOutBtn, wbZoomLevelDisplay, wbZoomInBtn;
-let kanbanBoard, newColumnNameInput, addColumnBtn;
-let documentsSection, documentListDiv, newDocBtn, renameDocBtn, deleteDocBtn, collaborativeEditor;
-let docBoldBtn, docItalicBtn, docUnderlineBtn, docUlBtn, docOlBtn, downloadTxtBtn;
+// --- Sub-module references ---
+let kanbanModuleRef, whiteboardModuleRef, documentModuleRef;
 
 
-function selectShareDomElements() {
+function selectChatDomElements() {
     chatArea = document.getElementById('chatArea');
     messageInput = document.getElementById('messageInput');
     sendMessageBtn = document.getElementById('sendMessageBtn');
@@ -56,38 +76,11 @@ function selectShareDomElements() {
     triggerFileInput = document.getElementById('triggerFileInput');
     chatFileInput = document.getElementById('chatFileInput');
 
-    // For channels
     channelListDiv = document.getElementById('channelList');
     newChannelNameInput = document.getElementById('newChannelNameInput');
     addChannelBtn = document.getElementById('addChannelBtn');
-
-    whiteboardCanvas = document.getElementById('whiteboardCanvas');
-    wbColorPicker = document.getElementById('wbColorPicker');
-    wbLineWidth = document.getElementById('wbLineWidth');
-    wbClearBtn = document.getElementById('wbClearBtn');
-    wbLineWidthValue = document.getElementById('wbLineWidthValue');
-    wbToolPalette = document.querySelector('.wb-tool-palette');
-    wbZoomOutBtn = document.getElementById('wbZoomOutBtn');
-    wbZoomLevelDisplay = document.getElementById('wbZoomLevelDisplay');
-    wbZoomInBtn = document.getElementById('wbZoomInBtn');
-    
-    kanbanBoard = document.getElementById('kanbanBoard');
-    newColumnNameInput = document.getElementById('newColumnNameInput');
-    addColumnBtn = document.getElementById('addColumnBtn');
-
-    documentsSection = document.getElementById('documentsSection');
-    documentListDiv = document.getElementById('documentList');
-    newDocBtn = document.getElementById('newDocBtn');
-    renameDocBtn = document.getElementById('renameDocBtn');
-    deleteDocBtn = document.getElementById('deleteDocBtn');
-    collaborativeEditor = document.getElementById('collaborativeEditor');
-    docBoldBtn = document.getElementById('docBoldBtn');
-    docItalicBtn = document.getElementById('docItalicBtn');
-    docUnderlineBtn = document.getElementById('docUnderlineBtn');
-    docUlBtn = document.getElementById('docUlBtn');
-    docOlBtn = document.getElementById('docOlBtn');
-    downloadTxtBtn = document.getElementById('downloadTxtBtn');
 }
+
 
 function debounce(func, delay) {
     let timeout;
@@ -99,26 +92,7 @@ function debounce(func, delay) {
 }
 
 export function initShareFeatures(dependencies) {
-    selectShareDomElements();
-
-    sendChatMessageDep = dependencies.sendChatMessage;
-    sendPrivateMessageDep = dependencies.sendPrivateMessage;
-    sendFileMetaDep = dependencies.sendFileMeta;
-    sendFileChunkDep = dependencies.sendFileChunk;
-    sendDrawCommandDep = dependencies.sendDrawCommand;
-    sendInitialWhiteboardDep = dependencies.sendInitialWhiteboard;
-    sendKanbanUpdateDep = dependencies.sendKanbanUpdate;
-    sendInitialKanbanDep = dependencies.sendInitialKanban;
-    sendChatHistoryDep = dependencies.sendChatHistory;
-    sendInitialDocumentsDep = dependencies.sendInitialDocuments;
-    sendCreateDocumentDep = dependencies.sendCreateDocument;
-    sendRenameDocumentDep = dependencies.sendRenameDocument;
-    sendDeleteDocumentDep = dependencies.sendDeleteDocument;
-    sendDocumentContentUpdateDep = dependencies.sendDocumentContentUpdate;
-    sendCreateChannelDep = dependencies.sendCreateChannel;
-    onCreateChannelDep = dependencies.onCreateChannel;
-    sendInitialChannelsDep = dependencies.sendInitialChannels;
-    onInitialChannelsDep = dependencies.onInitialChannels;
+    selectChatDomElements();
 
 
     logStatusDep = dependencies.logStatus;
@@ -130,26 +104,77 @@ export function initShareFeatures(dependencies) {
     findPeerIdByNicknameDepFnc = dependencies.findPeerIdByNicknameFnc;
     currentRoomIdDep = dependencies.currentRoomId;
 
-    initChat();
-    initWhiteboardInternal();
-    initKanbanInternal();
-    initDocumentsModuleInternal();
     
+    sendChatMessageDep = dependencies.sendChatMessage;
+    sendPrivateMessageDep = dependencies.sendPrivateMessage;
+    sendFileMetaDep = dependencies.sendFileMeta;
+    sendFileChunkDep = dependencies.sendFileChunk;
+    sendChatHistoryDep = dependencies.sendChatHistory;
+    sendCreateChannelDep = dependencies.sendCreateChannel;
+    sendInitialChannelsDep = dependencies.sendInitialChannels;
+    sendDrawCommandDep = dependencies.sendDrawCommand;
+    sendInitialWhiteboardDep = dependencies.sendInitialWhiteboard;
+    sendKanbanUpdateDep = dependencies.sendKanbanUpdate;
+    sendInitialKanbanDep = dependencies.sendInitialKanban;
+    sendInitialDocumentsDep = dependencies.sendInitialDocuments;
+    sendCreateDocumentDep = dependencies.sendCreateDocument;
+    sendRenameDocumentDep = dependencies.sendRenameDocument;
+    sendDeleteDocumentDep = dependencies.sendDeleteDocument;
+    sendDocumentContentUpdateDep = dependencies.sendDocumentContentUpdate;
+
+    // Initialize sub-modules
+    const commonSubModuleDeps = {
+        logStatus: logStatusDep,
+        showNotification: showNotificationDep,
+        getPeerNicknames: getPeerNicknamesDep,
+        localGeneratedPeerId: localGeneratedPeerIdDep,
+        getIsHost: getIsHostDep,
+    };
+
+    kanbanModuleRef = initKanbanFeatures({
+        ...commonSubModuleDeps,
+        sendKanbanUpdate: sendKanbanUpdateDep,
+        sendInitialKanban: sendInitialKanbanDep,
+            });
+
+    whiteboardModuleRef = initWhiteboardFeatures({
+        ...commonSubModuleDeps,
+        sendDrawCommand: sendDrawCommandDep,
+        sendInitialWhiteboard: sendInitialWhiteboardDep,
+    });
+
+    documentModuleRef = initDocumentFeatures({
+        ...commonSubModuleDeps,
+        sendInitialDocuments: sendInitialDocumentsDep,
+        sendCreateDocument: sendCreateDocumentDep,
+        sendRenameDocument: sendRenameDocumentDep,
+        sendDeleteDocument: sendDeleteDocumentDep,
+        sendDocumentContentUpdate: sendDocumentContentUpdateDep,
+    });
+    
+    initChat();
+    
+    // Handle imported workspace state
     const importedState = dependencies.getImportedWorkspaceState();
     if (importedState && getIsHostDep && getIsHostDep()) {
+        // Load data into each module
         loadChatHistoryFromImport(importedState.chatHistory || []);
         if (importedState.channels) {
             channels = importedState.channels;
             currentActiveChannelId = importedState.currentActiveChannelIdForImport || (channels.length > 0 ? channels[0].id : null);
         }
-        loadWhiteboardHistoryFromImport(importedState.whiteboardHistory || []);
-        loadKanbanDataFromImport(importedState.kanbanData || { columns: [] });
-        loadDocumentsFromImport(importedState.documents || [], importedState.currentActiveDocumentId);
+        if (whiteboardModuleRef) whiteboardModuleRef.loadWhiteboardData(importedState.whiteboardHistory || []);
+        if (kanbanModuleRef) kanbanModuleRef.loadKanbanData(importedState.kanbanData || { columns: [] });
+        if (documentModuleRef) documentModuleRef.loadDocumentData(importedState.documents || [], importedState.currentActiveDocumentId);
+        
         if(dependencies.clearImportedWorkspaceState) dependencies.clearImportedWorkspaceState();
     }
     
-    if (getIsHostDep && getIsHostDep() && channels.length === 0) {
-        _createAndBroadcastChannel("#general", true);
+    if (getIsHostDep && getIsHostDep()) {
+        if (channels.length === 0) {
+            _createAndBroadcastChannel("#general", true);
+        }
+        if (documentModuleRef) documentModuleRef.ensureDefaultDocument();
     } else if (channels.length > 0 && !currentActiveChannelId) {
         setActiveChannel(channels[0].id, false);
     }
@@ -159,28 +184,43 @@ export function initShareFeatures(dependencies) {
     displayChatForCurrentChannel();
 
     return { 
+      
         handleChatMessage, handlePrivateMessage, handleFileMeta, handleFileChunk,
-        handleDrawCommand, handleInitialWhiteboard, handleKanbanUpdate, handleInitialKanban,
         handleChatHistory, 
-        handleInitialDocuments, handleCreateDocument, handleRenameDocument, handleDeleteDocument, handleDocumentContentUpdate,
+        handleCreateChannel, handleInitialChannels, 
+
+        
+        handleDrawCommand: (data, peerId) => whiteboardModuleRef.handleDrawCommand(data, peerId),
+        handleInitialWhiteboard: (data, peerId) => whiteboardModuleRef.handleInitialWhiteboard(data, peerId, getIsHostDep),
+        handleKanbanUpdate: (data, peerId) => kanbanModuleRef.handleKanbanUpdate(data, peerId, localGeneratedPeerIdDep),
+        handleInitialKanban: (data, peerId) => kanbanModuleRef.handleInitialKanban(data, peerId, getIsHostDep, localGeneratedPeerIdDep),
+        handleInitialDocuments: (data, peerId) => documentModuleRef.handleInitialDocuments(data, peerId),
+        handleCreateDocument: (data, peerId) => documentModuleRef.handleCreateDocument(data, peerId),
+        handleRenameDocument: (data, peerId) => documentModuleRef.handleRenameDocument(data, peerId),
+        handleDeleteDocument: (data, peerId) => documentModuleRef.handleDeleteDocument(data, peerId),
+        handleDocumentContentUpdate: (data, peerId) => documentModuleRef.handleDocumentContentUpdate(data, peerId),
+        
+        // UI interaction methods (delegated)
+        redrawWhiteboardFromHistoryIfVisible: (force) => whiteboardModuleRef.redrawWhiteboardFromHistoryIfVisible(force),
+        resizeWhiteboardAndRedraw: () => whiteboardModuleRef.resizeWhiteboardAndRedraw(),
+        renderKanbanBoardIfActive: (force) => kanbanModuleRef.renderKanbanBoardIfActive(force),
+        renderDocumentsIfActive: (force) => documentModuleRef.renderDocumentsIfActive(force),
+        ensureDefaultDocument: () => documentModuleRef.ensureDefaultDocument(), // Keep for main.js if needed during setup
+        
+        // Share.js specific methods
         sendFullStateToPeer,
         displaySystemMessage,
         updateChatMessageInputPlaceholder,
         primePrivateMessage,
         hideEmojiPicker,
         initializeEmojiPicker,
-        redrawWhiteboardFromHistoryIfVisible,
-        resizeWhiteboardAndRedraw,
-        renderKanbanBoardIfActive,
-        renderDocumentsIfActive,
-        ensureDefaultDocument,
-        setShareModulePeerInfo,
-        handleCreateChannel, handleInitialChannels, 
+        setShareModulePeerInfo, 
+        handleShareModulePeerLeave 
     };
 }
 
 export function setShareModulePeerInfo(peerNicknames) {
-    // Placeholder
+  
 }
 
 export function handleShareModulePeerLeave(peerId) {
@@ -199,13 +239,15 @@ export function handleShareModulePeerLeave(peerId) {
         }
     }
     keysToDelete.forEach(key => incomingFileBuffers.delete(key));
+
+  
 }
 
 
-// --- Chat Feature ---
+// --- Chat Feature (and Channels, File Sharing) ---
 function initChat() {
     if (!sendMessageBtn || !messageInput || !triggerFileInput || !chatFileInput || !emojiIcon || !emojiPickerPopup) return;
-    if (!addChannelBtn || !newChannelNameInput || !channelListDiv) return; // Check channel elements
+    if (!addChannelBtn || !newChannelNameInput || !channelListDiv) return; 
 
     sendMessageBtn.addEventListener('click', handleSendMessage);
     messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSendMessage(); });
@@ -226,7 +268,6 @@ function initChat() {
             emojiPickerPopup.classList.add('hidden');
         }
     });
-    // Channel creation
     addChannelBtn.addEventListener('click', handleAddChannelUI);
 }
 
@@ -272,7 +313,7 @@ function _createAndBroadcastChannel(channelName, isDefault = false) {
     if (!saneChannelName.startsWith('#')) {
         saneChannelName = '#' + saneChannelName;
     }
-    saneChannelName = saneChannelName.replace(/\s+/g, '-').toLowerCase(); // Basic sanitization
+    saneChannelName = saneChannelName.replace(/\s+/g, '-').toLowerCase(); 
 
     if (channels.find(ch => ch.name === saneChannelName)) {
         if(logStatusDep && !isDefault) logStatusDep(`Channel "${saneChannelName}" already exists.`, true);
@@ -283,9 +324,9 @@ function _createAndBroadcastChannel(channelName, isDefault = false) {
     channels.push(newChannel);
     
     if (sendCreateChannelDep) {
-        sendCreateChannelDep(newChannel); // Broadcast to others
+        sendCreateChannelDep(newChannel); 
     }
-    if (isDefault || channels.length === 1) { // Auto-activate if it's the first/default
+    if (isDefault || channels.length === 1) { 
         setActiveChannel(newChannel.id, false);
     }
     renderChannelList();
@@ -317,7 +358,7 @@ function renderChannelList() {
         channelItem.addEventListener('click', () => setActiveChannel(channel.id));
 
         const notifDot = document.createElement('span');
-        notifDot.classList.add('channel-notification-dot', 'hidden'); // Hidden by default
+        notifDot.classList.add('channel-notification-dot', 'hidden'); 
         channelItem.appendChild(notifDot);
 
         channelListDiv.appendChild(channelItem);
@@ -326,7 +367,7 @@ function renderChannelList() {
 
 function setActiveChannel(channelId, clearNotifications = true) {
     if (currentActiveChannelId === channelId && !clearNotifications) {
-        renderChannelList(); 
+        renderChannelList();
         return;
     }
     currentActiveChannelId = channelId;
@@ -339,7 +380,7 @@ function setActiveChannel(channelId, clearNotifications = true) {
             channelDot.classList.add('hidden');
         }
     }
-    if(messageInput) {
+    if(messageInput) { // Update placeholder
         const activeChannel = channels.find(c=>c.id === channelId);
         messageInput.placeholder = `Message ${activeChannel?.name || (currentRoomIdDep || '')}`;
     }
@@ -348,12 +389,16 @@ function setActiveChannel(channelId, clearNotifications = true) {
 function displayChatForCurrentChannel() {
     if (!chatArea) return;
     chatArea.innerHTML = '';
-    if (!currentActiveChannelId) {
-        return;
+    if (!currentActiveChannelId && chatHistory.some(msg => !msg.channelId && !msg.pmInfo && !msg.fileMeta && !msg.isSystem)) {
+      
     }
-    const messagesForChannel = chatHistory.filter(msg => msg.channelId === currentActiveChannelId || msg.pmInfo || msg.fileMeta || msg.isSystem); // Also show global messages
+    const messagesForChannel = chatHistory.filter(msg => 
+        msg.channelId === currentActiveChannelId ||
+        (!msg.channelId && (msg.pmInfo || msg.fileMeta || msg.isSystem))
+    );
     messagesForChannel.forEach(msg => {
-        if ( (msg.channelId && msg.channelId === currentActiveChannelId) || msg.pmInfo || msg.fileMeta || msg.isSystem ) {
+        
+         if ( (msg.channelId && msg.channelId === currentActiveChannelId) || msg.pmInfo || msg.fileMeta || msg.isSystem ) {
             displayMessage(msg, msg.senderPeerId === localGeneratedPeerIdDep, msg.isSystem);
         }
     });
@@ -405,7 +450,7 @@ function displayMessage(msgObject, isSelf = false, isSystem = false) {
             progressSpan.textContent = ` (Receiving 0%)`;
             messageDiv.appendChild(progressSpan);
         }
-    } else { // Regular channel message
+    } else {
         messageDiv.classList.add(isSelf ? 'self' : 'other');
         const senderSpan = document.createElement('span'); senderSpan.classList.add('sender');
         senderSpan.textContent = isSelf ? 'You' : senderNickname;
@@ -426,13 +471,13 @@ function addMessageToHistoryAndDisplay(msgData, isSelf = false, isSystem = false
 
     const fullMsgObject = {
         ...msgData,
-        channelId: channelIdForMsg,
+        channelId: channelIdForMsg, 
         timestamp: msgData.timestamp || Date.now(),
         senderPeerId: isSelf ? localGeneratedPeerIdDep : msgData.senderPeerId
     };
     chatHistory.push(fullMsgObject);
 
-    if ( (fullMsgObject.channelId && fullMsgObject.channelId === currentActiveChannelId) || isSystem || fullMsgObject.pmInfo || fullMsgObject.fileMeta) {
+    if ( isSystem || fullMsgObject.pmInfo || fullMsgObject.fileMeta || (fullMsgObject.channelId && fullMsgObject.channelId === currentActiveChannelId) ) {
         displayMessage(fullMsgObject, isSelf, isSystem);
     }
 }
@@ -456,11 +501,12 @@ function handleSendMessage() {
         const targetPeerId = findPeerIdByNicknameDepFnc ? findPeerIdByNicknameDepFnc(targetNickname) : null;
         if (targetPeerId && sendPrivateMessageDep) {
             sendPrivateMessageDep({ content: pmContent, timestamp }, targetPeerId);
+          
             addMessageToHistoryAndDisplay({ senderNickname: localCurrentNickname, message: pmContent, pmInfo: { type: 'sent', recipient: targetNickname }, timestamp }, true);
         } else {
             addMessageToHistoryAndDisplay({ message: `User "${targetNickname}" not found or PM failed.`, timestamp }, false, true);
         }
-    } else { // Regular channel message
+    } else { 
         if (!currentActiveChannelId) {
             addMessageToHistoryAndDisplay({ message: "Please select a channel to send a message.", timestamp }, false, true);
             return;
@@ -480,7 +526,7 @@ async function handleChatFileSelected(event) {
 
     if(logStatusDep) logStatusDep(`Preparing to send file: ${file.name}`);
     const fileMeta = { name: file.name, type: file.type, size: file.size, id: Date.now().toString() };
-    
+ 
     addMessageToHistoryAndDisplay({ senderNickname: localCurrentNickname, fileMeta: { ...fileMeta, receiving: true } }, true);
     
     sendFileMetaDep(fileMeta); 
@@ -531,11 +577,10 @@ export function handleChatMessage(msgData, peerId) {
     const senderNickname = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : `Peer ${peerId.substring(0, 6)}`;
     const fullMsgObject = { ...msgData, senderNickname, senderPeerId: peerId, timestamp: msgData.timestamp || Date.now() };
     
-    chatHistory.push(fullMsgObject);
-
+    chatHistory.push(fullMsgObject); 
     if (fullMsgObject.channelId === currentActiveChannelId) {
         displayMessage(fullMsgObject, false);
-    } else if (fullMsgObject.channelId && channelListDiv) { 
+    } else if (fullMsgObject.channelId && channelListDiv) {
         const channelDot = channelListDiv.querySelector(`.channel-list-item[data-channel-id="${fullMsgObject.channelId}"] .channel-notification-dot`);
         if (channelDot) {
             channelDot.classList.remove('hidden');
@@ -577,14 +622,16 @@ export function handleFileChunk(chunk, peerId, chunkMeta) {
             const blobUrl = URL.createObjectURL(completeFile);
 
             if (chatArea) {
+             
                 chatArea.querySelectorAll('.message.other.file-message').forEach(msgDiv => {
                     const senderSpan = msgDiv.querySelector('.sender');
                     const fileInfoStrong = msgDiv.querySelector('strong');
                     if (senderSpan && senderSpan.textContent === senderNickname && fileInfoStrong && fileInfoStrong.textContent === fileBuffer.meta.name) {
                         const existingProgress = msgDiv.querySelector(`#${progressId}`);
                         if (existingProgress) existingProgress.remove();
+                        
                         let downloadLink = msgDiv.querySelector('a');
-                        if (!downloadLink) {
+                        if (!downloadLink) { 
                             downloadLink = document.createElement('a');
                             msgDiv.appendChild(document.createTextNode(" "));
                             msgDiv.appendChild(downloadLink);
@@ -611,8 +658,11 @@ export function handleChatHistory(history, peerId) {
         if(logStatusDep) logStatusDep(`Received chat history from ${(getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : 'host'}.`);
     }
 }
-export function updateChatMessageInputPlaceholder(roomId) {
-    // This is now handled by setActiveChannel
+export function updateChatMessageInputPlaceholder() {
+    if(messageInput) {
+        const activeChannel = channels.find(c => c.id === currentActiveChannelId);
+        messageInput.placeholder = `Message ${activeChannel?.name || (currentRoomIdDep || 'current channel')}`;
+    }
 }
 export function primePrivateMessage(nickname) {
     if (messageInput) {
@@ -621,6 +671,7 @@ export function primePrivateMessage(nickname) {
     }
 }
 
+// --- Channel Handlers (managed by share.js) ---
 export function handleCreateChannel(newChannelData, peerId) {
     if (!channels.find(ch => ch.id === newChannelData.id)) {
         channels.push(newChannelData);
@@ -650,881 +701,54 @@ export function handleInitialChannels(receivedChannels, peerId) {
 }
 
 
-// --- Whiteboard Feature ---
-function initWhiteboardInternal() {
-    if (!whiteboardCanvas || !wbColorPicker || !wbLineWidth || !wbClearBtn || !wbLineWidthValue || !wbToolPalette || !wbZoomOutBtn || !wbZoomLevelDisplay || !wbZoomInBtn) return;
-    
-    whiteboardCanvas.style.backgroundColor = '#FFFFFF'; 
-    wbCtx = whiteboardCanvas.getContext('2d');
-    resizeWhiteboardAndRedraw();
-
-    wbColorPicker.addEventListener('change', (e) => { if (wbCtx) wbCtx.strokeStyle = e.target.value; });
-    wbLineWidth.addEventListener('input', (e) => { 
-        if (wbCtx) wbCtx.lineWidth = e.target.value; 
-        if (wbLineWidthValue) wbLineWidthValue.textContent = `${e.target.value}px`;
-    });
-    if (wbLineWidthValue) wbLineWidthValue.textContent = `${wbLineWidth.value}px`;
-    wbClearBtn.addEventListener('click', clearWhiteboardAndBroadcast);
-
-    const toolButtons = wbToolPalette.querySelectorAll('.wb-tool-btn');
-    toolButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            toolButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            currentWbTool = button.dataset.tool;
-            whiteboardCanvas.style.cursor = (currentWbTool === 'pen' || currentWbTool === 'rectangle' || currentWbTool === 'circle') ? 'crosshair' 
-                                         : (currentWbTool === 'eraser') ? 'grab' 
-                                         : 'default';
-        });
-    });
-    const defaultToolButton = wbToolPalette.querySelector(`.wb-tool-btn[data-tool="${currentWbTool}"]`);
-    if (defaultToolButton) defaultToolButton.classList.add('active');
-    whiteboardCanvas.style.cursor = 'crosshair';
-
-
-    wbZoomInBtn.addEventListener('click', () => zoomWhiteboard(true));
-    wbZoomOutBtn.addEventListener('click', () => zoomWhiteboard(false));
-    updateZoomDisplay();
-
-    ['mousedown', 'touchstart'].forEach(evt => whiteboardCanvas.addEventListener(evt, handleWbMouseDown, { passive: false }));
-    ['mousemove', 'touchmove'].forEach(evt => whiteboardCanvas.addEventListener(evt, handleWbMouseMove, { passive: false }));
-    ['mouseup', 'touchend', 'mouseout', 'touchcancel'].forEach(evt => whiteboardCanvas.addEventListener(evt, handleWbMouseUp));
-    
-    window.addEventListener('resize', resizeWhiteboardAndRedraw);
-
-    if (wbCtx) {
-        wbCtx.strokeStyle = wbColorPicker.value;
-        wbCtx.lineWidth = wbLineWidth.value;
-        wbCtx.lineCap = 'round';
-        wbCtx.lineJoin = 'round';
-    }
-}
-
-function updateZoomDisplay() {
-    if(wbZoomLevelDisplay) wbZoomLevelDisplay.textContent = `${Math.round(wbZoomLevel * 100)}%`;
-}
-
-function zoomWhiteboard(zoomIn) {
-    if (!whiteboardCanvas) return;
-    const oldZoom = wbZoomLevel;
-    const physCenterX = whiteboardCanvas.width / 2;
-    const physCenterY = whiteboardCanvas.height / 2;
-
-    const logCenterX_before = (physCenterX / oldZoom) + wbPanX;
-    const logCenterY_before = (physCenterY / oldZoom) + wbPanY;
-
-    if (zoomIn) {
-        wbZoomLevel = Math.min(WB_MAX_ZOOM, wbZoomLevel + WB_ZOOM_STEP);
-    } else {
-        wbZoomLevel = Math.max(WB_MIN_ZOOM, wbZoomLevel - WB_ZOOM_STEP);
-    }
-    wbZoomLevel = parseFloat(wbZoomLevel.toFixed(2));
-
-    wbPanX = logCenterX_before - (physCenterX / wbZoomLevel);
-    wbPanY = logCenterY_before - (physCenterY / wbZoomLevel);
-    
-    updateZoomDisplay();
-    redrawWhiteboardFromHistory();
-}
-
-function getWbPhysicalEventPosition(event) { 
-    if (!whiteboardCanvas) return {x:0, y:0};
-    const rect = whiteboardCanvas.getBoundingClientRect();
-    let clientX, clientY;
-    if (event.touches && event.touches.length > 0) {
-        clientX = event.touches[0].clientX;
-        clientY = event.touches[0].clientY;
-    } else {
-        clientX = event.clientX;
-        clientY = event.clientY;
-    }
-    return { x: clientX - rect.left, y: clientY - rect.top };
-}
-
-function getWbLogicalEventPosition(event) { 
-    const physicalPos = getWbPhysicalEventPosition(event);
-    return {
-        x: (physicalPos.x / wbZoomLevel) + wbPanX,
-        y: (physicalPos.y / wbZoomLevel) + wbPanY
-    };
-}
-
-function handleWbMouseDown(e) {
-    if (!wbCtx) return;
-    e.preventDefault();
-    const logicalPos = getWbLogicalEventPosition(e);
-
-    wbIsDrawing = true;
-    wbLastX = logicalPos.x;
-    wbLastY = logicalPos.y;
-
-    if (currentWbTool === 'rectangle' || currentWbTool === 'circle') {
-        wbShapeStartX = logicalPos.x;
-        wbShapeStartY = logicalPos.y;
-    }
-}
-
-function handleWbMouseMove(e) {
-    if (!wbIsDrawing || !wbCtx) return;
-    e.preventDefault();
-    const logicalPos = getWbLogicalEventPosition(e);
-    const currentLogicalX = logicalPos.x;
-    const currentLogicalY = logicalPos.y;
-
-    if (currentWbTool === 'pen' || currentWbTool === 'eraser') {
-        const drawCmdData = {
-            type: currentWbTool,
-            x0: wbLastX, y0: wbLastY,
-            x1: currentLogicalX, y1: currentLogicalY,
-            color: (currentWbTool === 'pen') ? wbColorPicker.value : '#FFFFFF',
-            lineWidth: (currentWbTool === 'pen') ? parseFloat(wbLineWidth.value) : Math.max(10, parseFloat(wbLineWidth.value) * 1.5)
-        };
-        applyDrawCommand(drawCmdData);
-        whiteboardHistory.push(drawCmdData);
-        if (sendDrawCommandDep) sendDrawCommandDep(drawCmdData);
-        if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('whiteboardSection');
-    }
-    
-    wbLastX = currentLogicalX;
-    wbLastY = currentLogicalY;
-}
-
-function handleWbMouseUp() {
-    if (!wbIsDrawing || !wbCtx) return;
-    
-    if (currentWbTool === 'rectangle') {
-        const logicalWidth = wbLastX - wbShapeStartX;
-        const logicalHeight = wbLastY - wbShapeStartY;
-        const rectCmd = {
-            type: 'rectangle', x: wbShapeStartX, y: wbShapeStartY, width: logicalWidth, height: logicalHeight,
-            color: wbColorPicker.value, lineWidth: parseFloat(wbLineWidth.value)
-        };
-        applyDrawCommand(rectCmd);
-        whiteboardHistory.push(rectCmd);
-        if (sendDrawCommandDep) sendDrawCommandDep(rectCmd);
-        if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('whiteboardSection');
-
-    } else if (currentWbTool === 'circle') {
-        const dLogicalX = wbLastX - wbShapeStartX;
-        const dLogicalY = wbLastY - wbShapeStartY;
-        const logicalRadius = Math.sqrt(dLogicalX * dLogicalX + dLogicalY * dLogicalY);
-        const circleCmd = {
-            type: 'circle', cx: wbShapeStartX, cy: wbShapeStartY, radius: logicalRadius,
-            color: wbColorPicker.value, lineWidth: parseFloat(wbLineWidth.value)
-        };
-        applyDrawCommand(circleCmd);
-        whiteboardHistory.push(circleCmd);
-        if (sendDrawCommandDep) sendDrawCommandDep(circleCmd);
-         if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('whiteboardSection');
-    }
-    
-    wbIsDrawing = false;
-}
-
-function applyDrawCommand(cmd) {
-    if (!wbCtx || !whiteboardCanvas) return;
-
-    const originalStrokeStyle = wbCtx.strokeStyle;
-    const originalLineWidth = wbCtx.lineWidth;
-    const originalFillStyle = wbCtx.fillStyle;
-
-    const transformX = (logicalX) => (logicalX - wbPanX) * wbZoomLevel;
-    const transformY = (logicalY) => (logicalY - wbPanY) * wbZoomLevel;
-    const transformSize = (logicalSize) => logicalSize * wbZoomLevel;
-
-    wbCtx.strokeStyle = cmd.color || (wbColorPicker ? wbColorPicker.value : '#000000');
-    wbCtx.lineWidth = transformSize(cmd.lineWidth || (wbLineWidth ? parseFloat(wbLineWidth.value) : 3)); 
-
-    switch (cmd.type) {
-        case 'pen': case 'draw': 
-            wbCtx.beginPath();
-            wbCtx.moveTo(transformX(cmd.x0), transformY(cmd.y0));
-            wbCtx.lineTo(transformX(cmd.x1), transformY(cmd.y1));
-            wbCtx.stroke();
-            wbCtx.closePath();
-            break;
-        case 'eraser': case 'erase':
-            wbCtx.strokeStyle = '#FFFFFF';
-            wbCtx.lineWidth = transformSize(cmd.lineWidth); 
-            wbCtx.beginPath();
-            wbCtx.moveTo(transformX(cmd.x0), transformY(cmd.y0));
-            wbCtx.lineTo(transformX(cmd.x1), transformY(cmd.y1));
-            wbCtx.stroke();
-            wbCtx.closePath();
-            break;
-        case 'rectangle':
-            wbCtx.beginPath();
-            wbCtx.rect(transformX(cmd.x), transformY(cmd.y), transformSize(cmd.width), transformSize(cmd.height));
-            wbCtx.stroke();
-            wbCtx.closePath();
-            break;
-        case 'circle':
-            wbCtx.beginPath();
-            wbCtx.arc(transformX(cmd.cx), transformY(cmd.cy), transformSize(cmd.radius), 0, 2 * Math.PI);
-            wbCtx.stroke();
-            wbCtx.closePath();
-            break;
-        case 'clear':
-            wbCtx.fillStyle = '#FFFFFF';
-            wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
-            wbPanX = 0; wbPanY = 0; wbZoomLevel = 1.0; // Reset pan and zoom on clear
-            updateZoomDisplay();
-            break;
-        default: console.warn("Unknown draw command type:", cmd.type);
-    }
-
-    wbCtx.strokeStyle = originalStrokeStyle;
-    wbCtx.lineWidth = originalLineWidth;
-    wbCtx.fillStyle = originalFillStyle;
-}
-
-export function resizeWhiteboardAndRedraw() {
-    if (!whiteboardCanvas || !whiteboardCanvas.offsetParent) return;
-    const displayWidth = whiteboardCanvas.clientWidth;
-    const displayHeight = whiteboardCanvas.clientHeight;
-    if (displayWidth <= 0 || displayHeight <= 0) return;
-
-    if (whiteboardCanvas.width !== displayWidth || whiteboardCanvas.height !== displayHeight) {
-        whiteboardCanvas.width = displayWidth;
-        whiteboardCanvas.height = displayHeight;
-    }
-    if (wbCtx) { // Ensure context exists before trying to fill
-        wbCtx.fillStyle = '#FFFFFF';
-        wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
-    }
-    redrawWhiteboardFromHistory();
-}
-
-function clearWhiteboardAndBroadcast() {
-    const clearCmd = { type: 'clear' };
-    applyDrawCommand(clearCmd); // This will apply to local canvas and reset local pan/zoom
-    whiteboardHistory = [clearCmd]; // History now only contains the clear command
-    if (sendDrawCommandDep) sendDrawCommandDep(clearCmd);
-    if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('whiteboardSection');
-}
-
-function redrawWhiteboardFromHistory() {
-    if (!wbCtx || !whiteboardCanvas || whiteboardCanvas.width === 0 || whiteboardCanvas.height === 0) {
-        // console.warn('redrawWhiteboardFromHistory: Ctx or canvas not ready or zero size.');
-        return;
-    }
-
-    // Initial clear of the canvas before replaying any history
-    wbCtx.fillStyle = '#FFFFFF';
-    wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
-    
-    // Set default drawing styles for this session.
-    // applyDrawCommand will use specific styles from commands if they exist.
-    wbCtx.strokeStyle = wbColorPicker ? wbColorPicker.value : '#000000'; 
-    wbCtx.lineWidth = wbLineWidth ? parseFloat(wbLineWidth.value) : 3;
-    wbCtx.lineCap = 'round';
-    wbCtx.lineJoin = 'round';
-    
-    // Apply each command from history.
-    // applyDrawCommand handles 'clear' which includes resetting pan/zoom for subsequent commands.
-    whiteboardHistory.forEach(cmd => {
-        applyDrawCommand(cmd);
-    });
-}
-
-export function redrawWhiteboardFromHistoryIfVisible(force = false) {
-    if (whiteboardCanvas && (whiteboardCanvas.offsetParent || force)) {
-        if (wbCtx) {
-            // This initial clear might be redundant if redrawWhiteboardFromHistory also does it,
-            // but it's safe.
-            wbCtx.fillStyle = '#FFFFFF';
-            wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
-        }
-        redrawWhiteboardFromHistory();
-    }
-}
-
-export function handleDrawCommand(cmd, peerId) {
-    applyDrawCommand(cmd); // Apply to local canvas
-    if (cmd.type === 'clear') {
-        whiteboardHistory = [cmd]; // Replace history with clear command
-    } else if (!whiteboardHistory.find(c => JSON.stringify(c) === JSON.stringify(cmd))) { // Avoid duplicates if somehow received own echo
-        whiteboardHistory.push(cmd);
-    }
-    if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('whiteboardSection');
-}
-
-export function handleInitialWhiteboard(history, peerId) {
-    if (getIsHostDep && !getIsHostDep()) { // Only non-hosts process this
-        const nickname = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : 'host';
-        if(logStatusDep) logStatusDep(`Client: Received initial whiteboard history from ${nickname}, length: ${history.length}.`);
-        // console.log('Client: Received whiteboard history:', JSON.stringify(history));
-
-        whiteboardHistory = history; // Can be an empty array if host's board was empty
-        wbZoomLevel = 1.0; wbPanX = 0; wbPanY = 0; // Reset client's pan/zoom to default for the received state
-        updateZoomDisplay();
-        redrawWhiteboardFromHistoryIfVisible(true); // Force redraw with the new history
-        if(logStatusDep) logStatusDep(`Client: Whiteboard state applied from ${nickname}.`);
-    }
-}
-
-// --- Kanban Feature ---
-function initKanbanInternal() {
-    if(!addColumnBtn || !kanbanBoard || !newColumnNameInput) return;
-    addColumnBtn.addEventListener('click', handleAddKanbanColumn);
-    renderKanbanBoard();
-}
-
-function renderKanbanBoard() {
-    if (!kanbanBoard) return;
-    kanbanBoard.innerHTML = '';
-    if (!kanbanData || !kanbanData.columns) kanbanData = { columns: [] };
-
-    kanbanData.columns.forEach(column => {
-        const columnDiv = document.createElement('div');
-        columnDiv.classList.add('kanban-column');
-        columnDiv.dataset.columnId = column.id;
-        
-        let cardsHtml = (column.cards || []).map(card => {
-            const cardPriority = card.priority || 1; // Default to 1 if undefined
-            return `
-                <div class="kanban-card priority-${cardPriority}" draggable="true" data-card-id="${card.id}" data-parent-column-id="${column.id}" data-priority="${cardPriority}">
-                    <div class="kanban-card-content">
-                        <p>${card.text}</p>
-                        <select class="kanban-card-priority" data-card-id="${card.id}" data-column-id="${column.id}">
-                            <option value="1" ${cardPriority == 1 ? 'selected' : ''}>Low</option>
-                            <option value="2" ${cardPriority == 2 ? 'selected' : ''}>Medium</option>
-                            <option value="3" ${cardPriority == 3 ? 'selected' : ''}>High</option>
-                            <option value="4" ${cardPriority == 4 ? 'selected' : ''}>Critical</option>
-                        </select>
-                    </div>
-                    <button class="delete-card-btn" data-card-id="${card.id}" data-column-id="${column.id}" title="Delete card">❌</button>
-                </div>`;
-        }).join('');
-
-        let addCardSectionHtml = '';
-        if (column.id === kanbanCurrentlyAddingCardToColumnId) {
-            addCardSectionHtml = `
-                <div class="add-card-form">
-                    <textarea class="new-card-text-input" placeholder="Enter card text..."></textarea>
-                    <div class="add-card-form-actions">
-                        <button class="save-new-card-btn" data-column-id="${column.id}">Save Card</button>
-                        <button class="cancel-add-card-btn" data-column-id="${column.id}">Cancel</button>
-                    </div>
-                </div>`;
-        } else {
-            addCardSectionHtml = `<button class="add-card-btn" data-column-id="${column.id}">+ Add Card</button>`;
-        }
-
-        columnDiv.innerHTML = `
-            <h3>${column.title}<button class="delete-column-btn" data-column-id="${column.id}" title="Delete column">🗑️</button></h3>
-            <div class="kanban-cards">${cardsHtml}</div>
-            ${addCardSectionHtml}`;
-        kanbanBoard.appendChild(columnDiv);
-    });
-
-    // Event Listeners
-    kanbanBoard.querySelectorAll('.add-card-btn').forEach(btn => btn.addEventListener('click', () => handleShowAddCardForm(btn.dataset.columnId)));
-    kanbanBoard.querySelectorAll('.save-new-card-btn').forEach(btn => btn.addEventListener('click', () => handleSaveNewCard(btn.dataset.columnId)));
-    kanbanBoard.querySelectorAll('.cancel-add-card-btn').forEach(btn => btn.addEventListener('click', () => handleCancelAddCard()));
-    
-    kanbanBoard.querySelectorAll('.delete-column-btn').forEach(btn => btn.addEventListener('click', () => handleDeleteKanbanColumn(btn.dataset.columnId)));
-    kanbanBoard.querySelectorAll('.delete-card-btn').forEach(btn => btn.addEventListener('click', () => handleDeleteKanbanCard(btn.dataset.columnId, btn.dataset.cardId)));
-    
-    kanbanBoard.querySelectorAll('.kanban-card-priority').forEach(selectEl => {
-        selectEl.addEventListener('change', (e) => handleUpdateCardPriority(e.target.dataset.columnId, e.target.dataset.cardId, e.target.value));
-    });
-
-    kanbanBoard.querySelectorAll('.kanban-card').forEach(card => {
-        card.addEventListener('dragstart', handleKanbanDragStart);
-        card.addEventListener('dragend', handleKanbanDragEnd);
-    });
-    kanbanBoard.querySelectorAll('.kanban-column').forEach(col => {
-        col.addEventListener('dragover', handleKanbanDragOver);
-        col.addEventListener('dragleave', handleKanbanDragLeave);
-        col.addEventListener('drop', handleKanbanDrop);
-    });
-
-    // Focus textarea if a form is active
-    if (kanbanCurrentlyAddingCardToColumnId) {
-        const activeFormTextarea = kanbanBoard.querySelector(`.kanban-column[data-column-id="${kanbanCurrentlyAddingCardToColumnId}"] .new-card-text-input`);
-        if (activeFormTextarea) activeFormTextarea.focus();
-    }
-}
-
-export function renderKanbanBoardIfActive(force = false) {
-    const kanbanSectionEl = document.getElementById('kanbanSection');
-    if (kanbanBoard && ( (kanbanSectionEl && !kanbanSectionEl.classList.contains('hidden')) || force)) {
-        renderKanbanBoard();
-    }
-}
-
-function handleKanbanDragStart(e) {
-    draggedCardElement = e.target;
-    const cardPriority = e.target.dataset.priority || 1;
-    draggedCardData = {
-        id: e.target.dataset.cardId,
-        originalColumnId: e.target.dataset.parentColumnId,
-        text: e.target.querySelector('.kanban-card-content p') ? e.target.querySelector('.kanban-card-content p').textContent : '',
-        priority: parseInt(cardPriority)
-    };
-    e.dataTransfer.setData('text/plain', e.target.dataset.cardId);
-    e.dataTransfer.effectAllowed = 'move';
-    setTimeout(() => { if(draggedCardElement) draggedCardElement.classList.add('dragging'); }, 0);
-}
-function handleKanbanDragEnd(e) {
-    if(draggedCardElement) draggedCardElement.classList.remove('dragging');
-    draggedCardElement = null; draggedCardData = null;
-    if(kanbanBoard) kanbanBoard.querySelectorAll('.kanban-column.drag-over').forEach(col => col.classList.remove('drag-over'));
-}
-function handleKanbanDragOver(e) {
-    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-    const column = e.target.closest('.kanban-column');
-    if (column && kanbanBoard) {
-        kanbanBoard.querySelectorAll('.kanban-column.drag-over').forEach(col => col.classList.remove('drag-over'));
-        column.classList.add('drag-over');
-    }
-}
-function handleKanbanDragLeave(e) {
-    const column = e.target.closest('.kanban-column');
-    if (column && !column.contains(e.relatedTarget)) column.classList.remove('drag-over');
-}
-function handleKanbanDrop(e) {
-    e.preventDefault(); if (!draggedCardData) return;
-    const targetColumnDiv = e.target.closest('.kanban-column');
-    if (!targetColumnDiv) return;
-    targetColumnDiv.classList.remove('drag-over');
-    const targetColumnId = targetColumnDiv.dataset.columnId;
-
-    if (draggedCardData.originalColumnId !== targetColumnId) {
-        const sourceCol = kanbanData.columns.find(c => c.id === draggedCardData.originalColumnId);
-        const targetCol = kanbanData.columns.find(c => c.id === targetColumnId);
-        if (sourceCol && targetCol) {
-            if (!sourceCol.cards) sourceCol.cards = [];
-            const cardIndex = sourceCol.cards.findIndex(card => card.id === draggedCardData.id);
-            if (cardIndex > -1) {
-                const [movedCard] = sourceCol.cards.splice(cardIndex, 1);
-                if (!targetCol.cards) targetCol.cards = [];
-                targetCol.cards.push(movedCard); // movedCard already has its priority
-                const update = { type: 'moveCard', cardId: draggedCardData.id, fromColumnId: draggedCardData.originalColumnId, toColumnId: targetColumnId, cardData: movedCard };
-                if (sendKanbanUpdateDep) sendKanbanUpdateDep(update);
-                renderKanbanBoard();
-                if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('kanbanSection');
-            }
-        }
-    }
-    draggedCardElement = null; draggedCardData = null;
-}
-
-function handleAddKanbanColumn() {
-    if(!newColumnNameInput) return;
-    const columnName = newColumnNameInput.value.trim(); if (!columnName) return;
-    const newColumn = { id: `col-${Date.now()}`, title: columnName, cards: [] };
-    if (!kanbanData.columns) kanbanData.columns = [];
-    kanbanData.columns.push(newColumn);
-    if (sendKanbanUpdateDep) sendKanbanUpdateDep({ type: 'addColumn', column: newColumn });
-    renderKanbanBoard(); newColumnNameInput.value = '';
-    if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('kanbanSection');
-}
-
-function handleShowAddCardForm(columnId) {
-    kanbanCurrentlyAddingCardToColumnId = columnId;
-    renderKanbanBoard();
-}
-
-function handleSaveNewCard(columnId) {
-    const columnDiv = kanbanBoard.querySelector(`.kanban-column[data-column-id="${columnId}"]`);
-    if (!columnDiv) return;
-    const textarea = columnDiv.querySelector('.new-card-text-input');
-    if (!textarea) return;
-
-    const cardText = textarea.value.trim();
-    if (!cardText) {
-        if (logStatusDep) logStatusDep("Card text cannot be empty.", true);
-        textarea.focus();
-        return;
-    }
-
-    const column = kanbanData.columns.find(col => col.id === columnId);
-    if (column) {
-        const newCard = { 
-            id: `card-${Date.now()}-${Math.random().toString(36).substring(2,7)}`, 
-            text: cardText,
-            priority: 1 // Default priority
-        };
-        if (!column.cards) column.cards = [];
-        column.cards.push(newCard);
-        
-        if (sendKanbanUpdateDep) sendKanbanUpdateDep({ type: 'addCard', columnId, card: newCard });
-        
-        kanbanCurrentlyAddingCardToColumnId = null; // Reset state
-        renderKanbanBoard(); // Re-render to show new card and remove form
-        if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('kanbanSection');
-    }
-}
-
-function handleCancelAddCard() {
-    kanbanCurrentlyAddingCardToColumnId = null;
-    renderKanbanBoard();
-}
-
-function handleUpdateCardPriority(columnId, cardId, newPriorityStr) {
-    const newPriority = parseInt(newPriorityStr);
-    const column = kanbanData.columns.find(c => c.id === columnId);
-    if (column && column.cards) {
-        const card = column.cards.find(c => c.id === cardId);
-        if (card) {
-            card.priority = newPriority;
-            if (sendKanbanUpdateDep) sendKanbanUpdateDep({ type: 'updateCardPriority', columnId, cardId, priority: newPriority });
-            renderKanbanBoard(); // Re-render to show style change
-            if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('kanbanSection');
-        }
-    }
-}
-
-
-function handleDeleteKanbanColumn(columnId) {
-    if (!confirm("Delete column and all cards?")) return;
-    kanbanData.columns = kanbanData.columns.filter(col => col.id !== columnId);
-    if (sendKanbanUpdateDep) sendKanbanUpdateDep({ type: 'deleteColumn', columnId });
-    renderKanbanBoard();
-    if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('kanbanSection');
-}
-function handleDeleteKanbanCard(columnId, cardId) {
-    if (!confirm("Delete card?")) return;
-    const column = kanbanData.columns.find(col => col.id === columnId);
-    if (column && column.cards) {
-        column.cards = column.cards.filter(card => card.id !== cardId);
-        if (sendKanbanUpdateDep) sendKanbanUpdateDep({ type: 'deleteCard', columnId, cardId });
-        renderKanbanBoard();
-        if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('kanbanSection');
-    }
-}
-
-export function handleKanbanUpdate(update, peerId) {
-    let needsRender = true;
-    if (!kanbanData.columns) kanbanData.columns = [];
-    switch (update.type) {
-        case 'fullState': 
-            kanbanData = update.data;
-            if (kanbanData && kanbanData.columns) {
-                kanbanData.columns.forEach(column => {
-                    if (column.cards) {
-                        column.cards.forEach(card => card.priority = card.priority || 1);
-                    }
-                });
-            }
-            break;
-        case 'addColumn': 
-            if (!kanbanData.columns.find(c => c.id === update.column.id)) {
-                kanbanData.columns.push(update.column);
-            } else {
-                needsRender = false;
-            }
-            break;
-        case 'addCard': { 
-            const col = kanbanData.columns.find(c => c.id === update.columnId); 
-            if (col) { 
-                if (!col.cards) col.cards = []; 
-                const existingCardIndex = col.cards.findIndex(c => c.id === update.card.id);
-                const cardData = { ...update.card, priority: update.card.priority || 1 };
-
-                if (existingCardIndex > -1) { // Card exists, update it
-                    col.cards[existingCardIndex] = { ...col.cards[existingCardIndex], ...cardData };
-                } else { // New card
-                    col.cards.push(cardData);
-                }
-            } else { needsRender = false; } 
-            break; 
-        }
-        case 'deleteColumn': 
-            kanbanData.columns = kanbanData.columns.filter(c => c.id !== update.columnId); 
-            break;
-        case 'deleteCard': { 
-            const col = kanbanData.columns.find(c => c.id === update.columnId); 
-            if (col && col.cards) {
-                col.cards = col.cards.filter(card => card.id !== update.cardId);
-            } else {
-                needsRender = false;
-            }
-            break; 
-        }
-        case 'moveCard': { 
-            const sCol = kanbanData.columns.find(c => c.id === update.fromColumnId); 
-            const tCol = kanbanData.columns.find(c => c.id === update.toColumnId); 
-            if (sCol && tCol) { 
-                if(!sCol.cards) sCol.cards =[]; 
-                const idx = sCol.cards.findIndex(c => c.id === update.cardId); 
-                if (idx > -1) { 
-                    const [mCard] = sCol.cards.splice(idx, 1); 
-                    const movedCardWithPriority = { ...mCard, ...(update.cardData || {}), priority: (update.cardData?.priority || mCard.priority || 1) };
-                    if (!tCol.cards) tCol.cards = []; 
-                    tCol.cards.push(movedCardWithPriority); 
-                } else { needsRender = false; } 
-            } else { needsRender = false; } 
-            break; 
-        }
-        case 'updateCardPriority': {
-            const col = kanbanData.columns.find(c => c.id === update.columnId);
-            if (col && col.cards) {
-                const card = col.cards.find(c => c.id === update.cardId);
-                if (card) {
-                    card.priority = update.priority;
-                } else { needsRender = false; }
-            } else { needsRender = false; }
-            break;
-        }
-        default: 
-            console.warn("Unknown Kanban update type:", update.type); 
-            needsRender = false;
-    }
-    if (needsRender) {
-        renderKanbanBoard();
-        if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('kanbanSection');
-    }
-}
-export function handleInitialKanban(initialData, peerId) {
-    if (getIsHostDep && !getIsHostDep()) {
-        kanbanData = initialData;
-         if (kanbanData && kanbanData.columns) {
-            kanbanData.columns.forEach(column => {
-                if (column.cards) {
-                    column.cards.forEach(card => card.priority = card.priority || 1);
-                }
-            });
-        }
-        renderKanbanBoardIfActive(true);
-        if(logStatusDep) logStatusDep(`Received Kanban state from ${(getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : 'host'}.`);
-    }
-}
-
-
-// --- Documents Feature ---
-const debouncedSendActiveDocumentContentUpdate = debounce(() => {
-    if (sendDocumentContentUpdateDep && currentActiveDocumentId && collaborativeEditor) {
-        const activeDoc = documents.find(d => d.id === currentActiveDocumentId);
-        if (activeDoc && collaborativeEditor.innerHTML !== activeDoc.htmlContent) {
-            activeDoc.htmlContent = collaborativeEditor.innerHTML;
-            sendDocumentContentUpdateDep({ documentId: currentActiveDocumentId, htmlContent: activeDoc.htmlContent });
-            if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('documentsSection');
-        }
-    }
-}, 750);
-
-function initDocumentsModuleInternal() {
-    if (!collaborativeEditor || !newDocBtn || !renameDocBtn || !deleteDocBtn || !docBoldBtn || !downloadTxtBtn || !documentListDiv) return;
-
-    collaborativeEditor.addEventListener('input', debouncedSendActiveDocumentContentUpdate);
-    const execFormatCommand = (command) => { document.execCommand(command, false, null); collaborativeEditor.focus(); debouncedSendActiveDocumentContentUpdate(); };
-    if(docBoldBtn) docBoldBtn.addEventListener('click', () => execFormatCommand('bold'));
-    if(docItalicBtn) docItalicBtn.addEventListener('click', () => execFormatCommand('italic'));
-    if(docUnderlineBtn) docUnderlineBtn.addEventListener('click', () => execFormatCommand('underline'));
-    if(docUlBtn) docUlBtn.addEventListener('click', () => execFormatCommand('insertUnorderedList'));
-    if(docOlBtn) docOlBtn.addEventListener('click', () => execFormatCommand('insertOrderedList'));
-    if(downloadTxtBtn) downloadTxtBtn.addEventListener('click', () => {
-        if (!currentActiveDocumentId) { if(logStatusDep) logStatusDep("No active document to download.", true); return; }
-        const activeDoc = documents.find(d => d.id === currentActiveDocumentId);
-        if (!activeDoc) { if(logStatusDep) logStatusDep("Active document not found.", true); return; }
-        const tempDiv = document.createElement('div'); tempDiv.innerHTML = activeDoc.htmlContent;
-        const text = tempDiv.innerText || tempDiv.textContent || ""; tempDiv.remove();
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-        const filename = `${activeDoc.name.replace(/[^a-z0-9]/gi, '_')}.txt`;
-        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = filename;
-        document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(link.href);
-    });
-
-    newDocBtn.addEventListener('click', () => uiActionCreateNewDocument());
-    renameDocBtn.addEventListener('click', uiActionRenameDocument);
-    deleteDocBtn.addEventListener('click', uiActionDeleteDocument);
-
-    renderDocumentList(); loadActiveDocumentContent();
-}
-export function renderDocumentsIfActive(force = false) {
-     if (documentsSection && ( (!documentsSection.classList.contains('hidden')) || force)) {
-        renderDocumentList(); loadActiveDocumentContent();
-    }
-}
-
-function renderDocumentList() {
-    if (!documentListDiv) return;
-    documentListDiv.innerHTML = '';
-    if (documents.length === 0 && getIsHostDep && getIsHostDep() && sendCreateDocumentDep) {
-        uiActionCreateNewDocument("Default Document", "<p>Welcome to your new document!</p>", false); return;
-    }
-    documents.forEach(doc => {
-        const docItem = document.createElement('span');
-        docItem.classList.add('document-list-item'); docItem.textContent = doc.name; docItem.dataset.documentId = doc.id;
-        if (doc.id === currentActiveDocumentId) docItem.classList.add('active');
-        docItem.addEventListener('click', () => setActiveDocument(doc.id));
-        documentListDiv.appendChild(docItem);
-    });
-    if (collaborativeEditor) {
-        if (!currentActiveDocumentId || !documents.find(d => d.id === currentActiveDocumentId)) {
-            collaborativeEditor.innerHTML = '<p>Select or create a document.</p>'; collaborativeEditor.contentEditable = "false";
-        } else collaborativeEditor.contentEditable = "true";
-    }
-}
-function loadActiveDocumentContent() {
-    if (!collaborativeEditor) return;
-    if (!currentActiveDocumentId && documents.length > 0) currentActiveDocumentId = documents[0].id;
-    const activeDoc = documents.find(d => d.id === currentActiveDocumentId);
-    if (activeDoc) {
-        if (collaborativeEditor.innerHTML !== activeDoc.htmlContent) collaborativeEditor.innerHTML = activeDoc.htmlContent;
-        collaborativeEditor.contentEditable = "true";
-    } else if (documents.length > 0) {
-        currentActiveDocumentId = documents[0].id;
-        if (collaborativeEditor.innerHTML !== documents[0].htmlContent) collaborativeEditor.innerHTML = documents[0].htmlContent;
-        collaborativeEditor.contentEditable = "true";
-    } else {
-        collaborativeEditor.innerHTML = '<p>Select or create a document to start editing.</p>';
-        collaborativeEditor.contentEditable = "false";
-    }
-    renderDocumentList();
-}
-function setActiveDocument(documentId) {
-    if (currentActiveDocumentId && collaborativeEditor) {
-        const currentDocObj = documents.find(d => d.id === currentActiveDocumentId);
-        if (currentDocObj && collaborativeEditor.innerHTML !== currentDocObj.htmlContent) currentDocObj.htmlContent = collaborativeEditor.innerHTML;
-    }
-    currentActiveDocumentId = documentId; loadActiveDocumentContent();
-}
-
-function uiActionCreateNewDocument(defaultName = null, defaultContent = null, broadcast = true) {
-    const docName = defaultName || prompt("Enter name for the new document:", `Document ${documents.length + 1}`);
-    if (!docName) return;
-    const newDoc = { id: `doc-${Date.now()}-${Math.random().toString(36).substring(2,7)}`, name: docName, htmlContent: defaultContent || '<p>Start typing...</p>' };
-    documents.push(newDoc); setActiveDocument(newDoc.id);
-    if (broadcast && sendCreateDocumentDep) {
-        sendCreateDocumentDep(newDoc);
-        if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('documentsSection');
-    }
-}
-export function ensureDefaultDocument() {
-    if (getIsHostDep && getIsHostDep() && documents.length === 0) {
-        uiActionCreateNewDocument("Shared Notes", "<p>Welcome!</p>", true);
-    }
-}
-function uiActionRenameDocument() {
-    if (!currentActiveDocumentId) { if(logStatusDep) logStatusDep("No doc selected.", true); return; }
-    const docToRename = documents.find(d => d.id === currentActiveDocumentId);
-    if (!docToRename) { if(logStatusDep) logStatusDep("Doc not found.", true); return; }
-    const newName = prompt("New name:", docToRename.name);
-    if (newName && newName.trim() && newName !== docToRename.name) {
-        docToRename.name = newName.trim(); renderDocumentList();
-        if (sendRenameDocumentDep) {
-            sendRenameDocumentDep({ documentId: currentActiveDocumentId, newName: docToRename.name });
-            if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('documentsSection');
-        }
-    }
-}
-function uiActionDeleteDocument() {
-    if (!currentActiveDocumentId) { if(logStatusDep) logStatusDep("No doc selected.", true); return; }
-    const docToDelete = documents.find(d => d.id === currentActiveDocumentId);
-    if (!docToDelete) { if(logStatusDep) logStatusDep("Doc not found.", true); return; }
-    if (!confirm(`Delete "${docToDelete.name}"?`)) return;
-    const deletedDocId = currentActiveDocumentId;
-    documents = documents.filter(doc => doc.id !== deletedDocId);
-    if (sendDeleteDocumentDep) sendDeleteDocumentDep({ documentId: deletedDocId });
-    currentActiveDocumentId = null;
-    if (documents.length > 0) setActiveDocument(documents[0].id);
-    else { if (getIsHostDep && getIsHostDep()) uiActionCreateNewDocument("Default", "<p>Empty.</p>", true); else { if(collaborativeEditor) { collaborativeEditor.innerHTML = '<p>No docs.</p>'; collaborativeEditor.contentEditable = "false"; } renderDocumentList(); }}
-    if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && deletedDocId && showNotificationDep) showNotificationDep('documentsSection');
-}
-
-export function handleInitialDocuments(data, peerId) {
-    if (getIsHostDep && !getIsHostDep()) {
-        documents = data.docs || [];
-        currentActiveDocumentId = data.activeId || (documents.length > 0 ? documents[0].id : null);
-        renderDocumentList(); loadActiveDocumentContent();
-        if(logStatusDep) logStatusDep(`Received docs state from ${(getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : 'host'}.`);
-    }
-}
-export function handleCreateDocument(newDocData, peerId) {
-    if (!documents.find(d => d.id === newDocData.id)) {
-        documents.push(newDocData); renderDocumentList();
-        if (documents.length === 1 && !currentActiveDocumentId) setActiveDocument(newDocData.id);
-        if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('documentsSection');
-    }
-}
-export function handleRenameDocument(renameData, peerId) {
-    const doc = documents.find(d => d.id === renameData.documentId);
-    if (doc) { doc.name = renameData.newName; renderDocumentList(); if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('documentsSection');}
-}
-export function handleDeleteDocument(deleteData, peerId) {
-    documents = documents.filter(d => d.id !== deleteData.documentId);
-    if (currentActiveDocumentId === deleteData.documentId) { currentActiveDocumentId = documents.length > 0 ? documents[0].id : null; loadActiveDocumentContent(); }
-    renderDocumentList(); if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('documentsSection');
-}
-export function handleDocumentContentUpdate(data, peerId) {
-    const doc = documents.find(d => d.id === data.documentId);
-    if (doc && collaborativeEditor) {
-        doc.htmlContent = data.htmlContent;
-        if (currentActiveDocumentId === data.documentId && collaborativeEditor.innerHTML !== data.htmlContent) collaborativeEditor.innerHTML = data.htmlContent;
-        if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('documentsSection');
-    }
-}
-
-
 // --- Data Export/Import/Sync ---
 export function getShareableData() {
-    if (currentActiveDocumentId && collaborativeEditor) {
-        const activeDoc = documents.find(d => d.id === currentActiveDocumentId);
-        if (activeDoc && collaborativeEditor.innerHTML !== activeDoc.htmlContent) activeDoc.htmlContent = activeDoc.innerHTML;
-    }
-    return { chatHistory, whiteboardHistory, kanbanData, documents, currentActiveDocumentId, channels, currentActiveChannelIdForImport: currentActiveChannelId };
+    if (documentModuleRef) documentModuleRef.getDocumentShareData();
+
+    return { 
+        chatHistory, 
+        channels, 
+        currentActiveChannelIdForImport: currentActiveChannelId,
+        whiteboardHistory: whiteboardModuleRef ? whiteboardModuleRef.getWhiteboardHistory() : [], 
+        kanbanData: kanbanModuleRef ? kanbanModuleRef.getKanbanData() : { columns: [] }, 
+        documents: documentModuleRef ? documentModuleRef.getDocumentShareData().docs : [], 
+        currentActiveDocumentId: documentModuleRef ? documentModuleRef.getDocumentShareData().activeId : null,
+    };
 }
 export function loadShareableData(data) { 
     chatHistory = data.chatHistory || [];
-    whiteboardHistory = data.whiteboardHistory || [];
-    kanbanData = data.kanbanData || { columns: [] };
-    documents = data.documents || [];
-    currentActiveDocumentId = data.currentActiveDocumentId || null;
     channels = data.channels || [];
     currentActiveChannelId = data.currentActiveChannelIdForImport || (channels.length > 0 ? channels[0].id : null);
 
-    if (kanbanData && kanbanData.columns) {
-        kanbanData.columns.forEach(column => {
-            if (column.cards) {
-                column.cards.forEach(card => card.priority = card.priority || 1);
-            }
-        });
-    }
+    if (whiteboardModuleRef) whiteboardModuleRef.loadWhiteboardData(data.whiteboardHistory || []);
+    if (kanbanModuleRef) kanbanModuleRef.loadKanbanData(data.kanbanData || { columns: [] });
+    if (documentModuleRef) documentModuleRef.loadDocumentData(data.documents || [], data.currentActiveDocumentId);
+   
+    renderChannelList();
+    displayChatForCurrentChannel();
+   
 }
-function loadChatHistoryFromImport(importedHistory) { chatHistory = importedHistory; }
-function loadWhiteboardHistoryFromImport(importedHistory) { whiteboardHistory = importedHistory; wbZoomLevel = 1.0; wbPanX = 0; wbPanY = 0; updateZoomDisplay(); }
-function loadKanbanDataFromImport(importedData) { 
-    kanbanData = importedData; 
-    if (kanbanData && kanbanData.columns) {
-        kanbanData.columns.forEach(column => {
-            if (column.cards) {
-                column.cards.forEach(card => card.priority = card.priority || 1);
-            }
-        });
-    }
+function loadChatHistoryFromImport(importedHistory) { 
+    chatHistory = importedHistory; 
+  
 }
-function loadDocumentsFromImport(importedDocs, activeId) {
-    documents = importedDocs; currentActiveDocumentId = activeId;
-    if (documents.length > 0 && (!currentActiveDocumentId || !documents.find(d => d.id === currentActiveDocumentId))) currentActiveDocumentId = documents[0].id;
-}
+
 
 export function sendFullStateToPeer(peerId) {
     if (getIsHostDep && getIsHostDep()) {
+      
         if (sendInitialChannelsDep) sendInitialChannelsDep(channels, peerId);
-        
         if (sendChatHistoryDep && chatHistory.length > 0) sendChatHistoryDep(chatHistory, peerId);
         
-        // For whiteboard, send history if it exists, or an empty array to signal initial state.
-        if (sendInitialWhiteboardDep) {
-            if (whiteboardHistory.length > 0) {
-                if(logStatusDep) logStatusDep(`Host: Sending whiteboard history to peer ${peerId.substring(0,6)}, length: ${whiteboardHistory.length}`);
-                sendInitialWhiteboardDep(whiteboardHistory, peerId);
-            } else {
-                if(logStatusDep) logStatusDep(`Host: Sending EMPTY whiteboard history to peer ${peerId.substring(0,6)}`);
-                sendInitialWhiteboardDep([], peerId); // Send empty array to trigger client-side reset
-            }
-        }
-        
-        if (sendInitialKanbanDep && (kanbanData.columns && kanbanData.columns.length > 0)) sendInitialKanbanDep(kanbanData, peerId);
-        if (sendInitialDocumentsDep) sendInitialDocumentsDep({ docs: documents, activeId: currentActiveDocumentId }, peerId);
+        // Sub-module states
+        if (whiteboardModuleRef) whiteboardModuleRef.sendInitialWhiteboardStateToPeer(peerId, getIsHostDep);
+        if (kanbanModuleRef) kanbanModuleRef.sendInitialKanbanStateToPeer(peerId, getIsHostDep);
+        if (documentModuleRef) documentModuleRef.sendInitialDocumentsStateToPeer(peerId, getIsHostDep);
     }
 }
 
 export function displaySystemMessage(message) {
+    
     const channelIdForSystem = currentActiveChannelId || 'system-global';
     addMessageToHistoryAndDisplay({ message, timestamp: Date.now(), channelId: channelIdForSystem }, false, true);
 }
@@ -1540,20 +764,8 @@ export function resetShareModuleStates(isCreatingHost = false) {
     if(channelListDiv) channelListDiv.innerHTML = '';
     if(newChannelNameInput) newChannelNameInput.value = '';
 
-
-    whiteboardHistory = []; wbZoomLevel = 1.0; wbPanX = 0; wbPanY = 0;
-    if(wbZoomLevelDisplay) updateZoomDisplay();
-    if (wbCtx && whiteboardCanvas ) { 
-         wbCtx.fillStyle = '#FFFFFF';
-         wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
-    }
-
-    kanbanData = { columns: [] }; 
-    kanbanCurrentlyAddingCardToColumnId = null; 
-    if (kanbanBoard) kanbanBoard.innerHTML = '';
-    
-    documents = []; currentActiveDocumentId = null;
-    if (documentListDiv) documentListDiv.innerHTML = '';
-    if (collaborativeEditor) { collaborativeEditor.innerHTML = '<p>Select or create a document.</p>'; collaborativeEditor.contentEditable = "false"; }
+    if (whiteboardModuleRef) whiteboardModuleRef.resetWhiteboardState();
+    if (kanbanModuleRef) kanbanModuleRef.resetKanbanState();
+    if (documentModuleRef) documentModuleRef.resetDocumentState();
     
 }

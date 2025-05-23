@@ -1,5 +1,12 @@
 import { joinRoom, selfId as localGeneratedPeerId } from './trystero-torrent.min.js';
-import { initShareFeatures, getShareableData, loadShareableData, resetShareModuleStates, setShareModulePeerInfo, handleShareModulePeerLeave } from './share.js';
+import { 
+    initShareFeatures, 
+    getShareableData, 
+    loadShareableData, 
+    resetShareModuleStates, 
+    setShareModulePeerInfo, 
+    handleShareModulePeerLeave 
+} from './share.js'; // Updated path, share.js is now the coordinator
 import { initMediaFeatures, handleMediaPeerStream, stopAllLocalMedia, setupMediaForNewPeer, cleanupMediaForPeer } from './media.js';
 
 const APP_ID = 'PeerSuite-0.0.9-newpaint-channels'; // Updated APP_ID
@@ -36,14 +43,14 @@ const currentNicknameSpan = document.getElementById('currentNicknameSpan');
 const themeToggle = document.getElementById('themeToggle');
 const sidebarButtons = document.querySelectorAll('.sidebar-button');
 const contentSections = document.querySelectorAll('.content-section');
-const userCountSpan = document.getElementById('userCountSpan'); // Managed by main
-const userListUl = document.getElementById('userList'); // Content managed by main, structure in HTML
+const userCountSpan = document.getElementById('userCountSpan'); 
+const userListUl = document.getElementById('userList'); 
 
 // Global State for main.js
 let roomApi;
 let localNickname = '';
 let currentRoomId = '';
-let currentActiveSection = 'chatSection'; // Default active section
+let currentActiveSection = 'chatSection'; 
 let peerNicknames = {}; // { peerId: nickname }
 let isHost = false;
 let importedWorkspaceState = null;
@@ -59,8 +66,8 @@ let sendCreateDocument, onCreateDocument;
 let sendRenameDocument, onRenameDocument;
 let sendDeleteDocument, onDeleteDocument;
 let sendDocumentContentUpdate, onDocumentContentUpdate;
-let sendCreateChannel, onCreateChannel; // ADDED for channels
-let sendInitialChannels, onInitialChannels; // ADDED for channels
+let sendCreateChannel, onCreateChannel; 
+let sendInitialChannels, onInitialChannels; 
 
 const CRYPTO_ALGO = 'AES-GCM';
 const textEncoder = new TextEncoder();
@@ -72,9 +79,12 @@ function initTheme() {
     document.documentElement.setAttribute('data-theme', savedTheme);
     if (themeToggle) themeToggle.checked = savedTheme === 'dark';
 
-    const wbModule = window.shareModuleRef; // shareModuleRef might not exist yet
-    if (wbModule && wbModule.redrawWhiteboardFromHistoryIfVisible) {
-        wbModule.redrawWhiteboardFromHistoryIfVisible();
+    // Whiteboard redraw on theme change is now handled slightly differently
+    // because shareModuleRef might point to the coordinator, not directly to whiteboard functions.
+    // The coordinator (share.js) will expose redrawWhiteboardFromHistoryIfVisible.
+    const shareModule = window.shareModuleRef; 
+    if (shareModule && shareModule.redrawWhiteboardFromHistoryIfVisible) {
+        shareModule.redrawWhiteboardFromHistoryIfVisible();
     }
 }
 if (themeToggle) {
@@ -82,9 +92,9 @@ if (themeToggle) {
         const newTheme = themeToggle.checked ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', newTheme);
         localStorage.setItem('viewPartyTheme', newTheme);
-        const wbModule = window.shareModuleRef;
-        if (wbModule && wbModule.redrawWhiteboardFromHistoryIfVisible) {
-            wbModule.redrawWhiteboardFromHistoryIfVisible();
+        const shareModule = window.shareModuleRef;
+        if (shareModule && shareModule.redrawWhiteboardFromHistoryIfVisible) {
+            shareModule.redrawWhiteboardFromHistoryIfVisible();
         }
     });
 }
@@ -125,7 +135,7 @@ sidebarButtons.forEach(button => {
 function showNotification(sectionId) {
     const targetSectionElement = document.getElementById(sectionId);
     if (sectionId === currentActiveSection && targetSectionElement && !targetSectionElement.classList.contains('hidden')) {
-        return; // Don't show if section is already active and visible
+        return; 
     }
     const dot = document.querySelector(`.notification-dot[data-notification-for="${sectionId}"]`);
     if (dot) dot.classList.remove('hidden');
@@ -172,7 +182,7 @@ function updateUserList() {
         li.dataset.peerId = peerId;
         li.addEventListener('click', () => {
             const shareModule = window.shareModuleRef;
-            if(shareModule && shareModule.primePrivateMessage) {
+            if(shareModule && shareModule.primePrivateMessage) { // primePrivateMessage is in share.js
                 shareModule.primePrivateMessage(nickname);
             }
         });
@@ -205,12 +215,12 @@ if (exportWorkspaceBtnSidebar) {
 
         try {
             logStatus("Exporting workspace...");
-            const shareData = getShareableData(); // This will now include channels
+            const shareData = getShareableData(); // This now calls the coordinator in share.js
 
             const workspaceState = {
-                ...shareData,
+                ...shareData, // shareData now includes kanban, whiteboard, documents from their respective modules via share.js
                 roomId: currentRoomId,
-                version: APP_ID // Use updated APP_ID
+                version: APP_ID 
             };
             const serializedState = JSON.stringify(workspaceState);
             const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -245,14 +255,16 @@ if (importFilePicker) {
             const decryptedStateString = textDecoder.decode(decryptedBuffer);
             importedWorkspaceState = JSON.parse(decryptedStateString);
 
+            // Check for presence of new top-level keys expected from the refactored structure
             if (!importedWorkspaceState ||
-                typeof importedWorkspaceState.kanbanData === 'undefined' ||
+                typeof importedWorkspaceState.kanbanData === 'undefined' || 
                 typeof importedWorkspaceState.whiteboardHistory === 'undefined' ||
-                typeof importedWorkspaceState.documents === 'undefined' ||
+                typeof importedWorkspaceState.documents === 'undefined' || 
                 typeof importedWorkspaceState.currentActiveDocumentId === 'undefined' ||
-                typeof importedWorkspaceState.channels === 'undefined' // Check for channels
+                typeof importedWorkspaceState.channels === 'undefined' || // chatHistory is also implicitly checked by structure
+                typeof importedWorkspaceState.chatHistory === 'undefined' 
             ) {
-                throw new Error("Invalid or incomplete workspace file structure.");
+                throw new Error("Invalid or incomplete workspace file structure (post-refactor).");
             }
             if (importedWorkspaceState.roomId && roomIdInput && !roomIdInput.value) { roomIdInput.value = importedWorkspaceState.roomId; }
             logStatus(`Workspace "${file.name}" decrypted and ready. Enter workspace password and create/join to apply.`);
@@ -343,27 +355,30 @@ async function joinRoomAndSetup() {
         [sendRenameDocument, onRenameDocument] = roomApi.makeAction('renDoc');
         [sendDeleteDocument, onDeleteDocument] = roomApi.makeAction('delDoc');
         [sendDocumentContentUpdate, onDocumentContentUpdate] = roomApi.makeAction('docUpd');
-        [sendCreateChannel, onCreateChannel] = roomApi.makeAction('createChan'); // ADDED
-        [sendInitialChannels, onInitialChannels] = roomApi.makeAction('initChans'); // ADDED
+        [sendCreateChannel, onCreateChannel] = roomApi.makeAction('createChan'); 
+        [sendInitialChannels, onInitialChannels] = roomApi.makeAction('initChans'); 
 
         const shareModuleDeps = {
+            // Chat, File, Channel related actions (managed by share.js)
             sendChatMessage, sendPrivateMessage, sendFileMeta, sendFileChunk,
-            sendDrawCommand, sendInitialWhiteboard, sendKanbanUpdate, sendInitialKanban,
-            sendChatHistory, sendInitialDocuments, sendCreateDocument, sendRenameDocument,
+            sendChatHistory, sendCreateChannel, sendInitialChannels,
+            // Actions for sub-modules (passed through share.js to them)
+            sendDrawCommand, sendInitialWhiteboard, 
+            sendKanbanUpdate, sendInitialKanban,
+            sendInitialDocuments, sendCreateDocument, sendRenameDocument,
             sendDeleteDocument, sendDocumentContentUpdate,
-            sendCreateChannel, onCreateChannel, // ADDED
-            sendInitialChannels, onInitialChannels, // ADDED
+            // General dependencies
             logStatus, showNotification,
             localGeneratedPeerId,
             getPeerNicknames: () => peerNicknames,
             getIsHost: () => isHost,
             getLocalNickname: () => localNickname,
             findPeerIdByNicknameFnc: findPeerIdByNickname,
-            getImportedWorkspaceState: () => importedWorkspaceState,
+            getImportedWorkspaceState: () => importedWorkspaceState, // For initial load in share.js
             clearImportedWorkspaceState: () => { importedWorkspaceState = null; },
             currentRoomId: currentRoomId,
         };
-        window.shareModuleRef = initShareFeatures(shareModuleDeps);
+        window.shareModuleRef = initShareFeatures(shareModuleDeps); // This now initializes sub-modules too
         
         const mediaModuleDeps = {
             roomApi, logStatus, showNotification,
@@ -372,46 +387,49 @@ async function joinRoomAndSetup() {
         };
         window.mediaModuleRef = initMediaFeatures(mediaModuleDeps);
 
+        // Loading imported state is now handled within initShareFeatures
         if (importedWorkspaceState && isHost) {
-            // loadShareableData now correctly handles channels if present in importedWorkspaceState
-            loadShareableData(importedWorkspaceState);
-            logStatus("Imported workspace state applied for hosting.");
-            importedWorkspaceState = null; // Clear after loading
+            // loadShareableData will be called inside initShareFeatures if importedWorkspaceState is present.
+            // The log message here might be slightly different from the one in initShareFeatures.
+            logStatus("Imported workspace state is being applied by the share module for hosting.");
+            // importedWorkspaceState is cleared by initShareFeatures after use.
         } else if (isHost && window.shareModuleRef.ensureDefaultDocument) {
+            // ensureDefaultDocument is now a method on the document module, exposed via shareModuleRef
             window.shareModuleRef.ensureDefaultDocument();
         }
         
-        // The displayInitialChatHistory call is removed from here.
-        // share.js's initShareFeatures now handles initial display logic for channels and chat.
-        
-        // Setup Trystero listeners
+        // Setup Trystero listeners - Callbacks now refer to methods on shareModuleRef,
+        // which internally delegate to sub-modules if necessary.
         onChatMessage((data, peerId) => window.shareModuleRef.handleChatMessage(data, peerId));
         onPrivateMessage((data, peerId) => window.shareModuleRef.handlePrivateMessage(data, peerId));
         onFileMeta((data, peerId) => window.shareModuleRef.handleFileMeta(data, peerId));
         onFileChunk((data, peerId, chunkMeta) => window.shareModuleRef.handleFileChunk(data, peerId, chunkMeta));
+        
         onDrawCommand((data, peerId) => window.shareModuleRef.handleDrawCommand(data, peerId));
         onInitialWhiteboard((data, peerId) => window.shareModuleRef.handleInitialWhiteboard(data, peerId));
         onKanbanUpdate((data, peerId) => window.shareModuleRef.handleKanbanUpdate(data, peerId));
         onInitialKanban((data, peerId) => window.shareModuleRef.handleInitialKanban(data, peerId));
+        
         onChatHistory((data, peerId) => window.shareModuleRef.handleChatHistory(data, peerId));
         onInitialDocuments((data, peerId) => window.shareModuleRef.handleInitialDocuments(data, peerId));
         onCreateDocument((data, peerId) => window.shareModuleRef.handleCreateDocument(data, peerId));
         onRenameDocument((data, peerId) => window.shareModuleRef.handleRenameDocument(data, peerId));
         onDeleteDocument((data, peerId) => window.shareModuleRef.handleDeleteDocument(data, peerId));
         onDocumentContentUpdate((data, peerId) => window.shareModuleRef.handleDocumentContentUpdate(data, peerId));
-        onCreateChannel((data, peerId) => window.shareModuleRef.handleCreateChannel(data, peerId)); // ADDED
-        onInitialChannels((data, peerId) => window.shareModuleRef.handleInitialChannels(data, peerId)); // ADDED
+        
+        onCreateChannel((data, peerId) => window.shareModuleRef.handleCreateChannel(data, peerId)); 
+        onInitialChannels((data, peerId) => window.shareModuleRef.handleInitialChannels(data, peerId)); 
 
         onNickname(async (nicknameData, peerId) => {
             const { nickname, initialJoin, isHost: peerIsHost } = nicknameData;
             const oldNickname = peerNicknames[peerId];
             peerNicknames[peerId] = nickname;
-            if(window.shareModuleRef && window.shareModuleRef.setShareModulePeerInfo) setShareModulePeerInfo(peerNicknames);
+            // setShareModulePeerInfo is a general function in share.js, doesn't need specific sub-module info here.
+            if(window.shareModuleRef && setShareModulePeerInfo) setShareModulePeerInfo(peerNicknames);
 
             if (initialJoin && oldNickname !== nickname) {
                 if(window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`${nickname}${peerIsHost ? ' (Host)' : ''} has joined.`);
                 if (sendNickname) await sendNickname({ nickname: localNickname, initialJoin: false, isHost: isHost }, peerId);
-                // sendFullStateToPeer is now called in onPeerJoin
             } else if (oldNickname && oldNickname !== nickname) {
                  if(window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`${oldNickname} is now known as ${nickname}.`);
             }
@@ -423,15 +441,12 @@ async function joinRoomAndSetup() {
 
         roomApi.onPeerJoin(async (joinedPeerId) => {
             logStatus(`Peer ${joinedPeerId.substring(0, 8)}... joined.`);
-            // It's important to send nickname first, so the host knows who to send full state to.
             if (sendNickname) await sendNickname({ nickname: localNickname, initialJoin: true, isHost: isHost }, joinedPeerId);
             
             if (window.mediaModuleRef && typeof setupMediaForNewPeer === 'function') setupMediaForNewPeer(joinedPeerId);
 
-            // Host sends full state after receiving the new peer's nickname (implicitly handled by Trystero, but good to be aware)
-            // Or, more robustly, send full state here assuming the new peer will soon send their nickname.
             if (isHost && window.shareModuleRef && window.shareModuleRef.sendFullStateToPeer) { 
-                 window.shareModuleRef.sendFullStateToPeer(joinedPeerId);
+                 window.shareModuleRef.sendFullStateToPeer(joinedPeerId); // This now sends state from all sub-modules
             }
         });
 
@@ -441,7 +456,8 @@ async function joinRoomAndSetup() {
             delete peerNicknames[leftPeerId];
             updateUserList();
             if(window.shareModuleRef && typeof setShareModulePeerInfo === 'function') setShareModulePeerInfo(peerNicknames);
-            if(typeof handleShareModulePeerLeave === 'function') handleShareModulePeerLeave(leftPeerId);
+            // handleShareModulePeerLeave in share.js handles general cleanup (like file transfers)
+            if(typeof handleShareModulePeerLeave === 'function') handleShareModulePeerLeave(leftPeerId); 
             if (window.mediaModuleRef && typeof cleanupMediaForPeer === 'function') cleanupMediaForPeer(leftPeerId);
         });
 
@@ -455,8 +471,7 @@ async function joinRoomAndSetup() {
         if(currentRoomCodeSpan) currentRoomCodeSpan.textContent = currentRoomId;
         if(currentNicknameSpan) currentNicknameSpan.textContent = localNickname;
         
-        // updateChatMessageInputPlaceholder is now handled by share.js's setActiveChannel
-        // if(window.shareModuleRef && window.shareModuleRef.updateChatMessageInputPlaceholder) window.shareModuleRef.updateChatMessageInputPlaceholder(currentRoomId);
+        // updateChatMessageInputPlaceholder is handled by share.js internally via setActiveChannel
 
         if(joinLeaveRoomBtn) { joinLeaveRoomBtn.textContent = 'Leave Workspace'; joinLeaveRoomBtn.disabled = false; }
 
@@ -469,22 +484,23 @@ async function joinRoomAndSetup() {
         if(window.shareModuleRef && window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`You joined workspace: ${currentRoomId} as ${localNickname}${isHost ? ' (Host)' : ''}.`);
 
         const shareModule = window.shareModuleRef;
-        if (shareModule) { // Ensure shareModule is initialized
+        if (shareModule) { 
+            // These calls will now be delegated by share.js to the respective modules
             if (currentActiveSection === 'whiteboardSection' && shareModule.resizeWhiteboardAndRedraw) {
                  shareModule.resizeWhiteboardAndRedraw();
-            } else if (shareModule.redrawWhiteboardFromHistoryIfVisible) { // Ensure it redraws if not initially active
-                shareModule.redrawWhiteboardFromHistoryIfVisible(true); // Force redraw if necessary
+            } else if (shareModule.redrawWhiteboardFromHistoryIfVisible) { 
+                shareModule.redrawWhiteboardFromHistoryIfVisible(true); 
             }
 
             if (currentActiveSection === 'kanbanSection' && shareModule.renderKanbanBoardIfActive) {
                 shareModule.renderKanbanBoardIfActive();
-            } else if (shareModule.renderKanbanBoardIfActive) {
-                 shareModule.renderKanbanBoardIfActive(true); // Force render
+            } else if (shareModule.renderKanbanBoardIfActive) { // Check if method exists before calling
+                 shareModule.renderKanbanBoardIfActive(true); 
             }
             if (currentActiveSection === 'documentsSection' && shareModule.renderDocumentsIfActive) {
                  shareModule.renderDocumentsIfActive();
             } else if (shareModule.renderDocumentsIfActive) {
-                shareModule.renderDocumentsIfActive(true); // Force render
+                shareModule.renderDocumentsIfActive(true); 
             }
         }
 
@@ -513,8 +529,8 @@ async function leaveRoomAndCleanup() {
     sendInitialDocuments = onInitialDocuments = sendCreateDocument = onCreateDocument = null;
     sendRenameDocument = onRenameDocument = sendDeleteDocument = onDeleteDocument = null;
     sendDocumentContentUpdate = onDocumentContentUpdate = null;
-    sendCreateChannel = onCreateChannel = null; // ADDED
-    sendInitialChannels = onInitialChannels = null; // ADDED
+    sendCreateChannel = onCreateChannel = null; 
+    sendInitialChannels = onInitialChannels = null; 
 
     resetToSetupState();
 }
@@ -533,10 +549,11 @@ function resetToSetupState() {
 
 
     if (window.mediaModuleRef && window.mediaModuleRef.resetMediaUIAndState) window.mediaModuleRef.resetMediaUIAndState();
-    // resetShareModuleStates will now handle channel UI reset as well
+    
+    // resetShareModuleStates in share.js now calls reset functions for each sub-module
     if (window.shareModuleRef && typeof resetShareModuleStates === 'function') {
-        resetShareModuleStates();
-        if (window.shareModuleRef.hideEmojiPicker) window.shareModuleRef.hideEmojiPicker();
+        resetShareModuleStates(); 
+        if (window.shareModuleRef.hideEmojiPicker) window.shareModuleRef.hideEmojiPicker(); // Emoji picker is chat-specific
     }
 
     if(userListUl) userListUl.innerHTML = '';
@@ -559,18 +576,17 @@ function resetToSetupState() {
     peerNicknames = {};
     isHost = false;
     currentRoomId = '';
-    importedWorkspaceState = null;
+    importedWorkspaceState = null; // Ensure this is cleared
 }
 
 // --- Event Listeners for Main Controls ---
 if (createPartyBtn) {
     createPartyBtn.addEventListener('click', () => {
         isHost = true;
-        // If importing, share.js->loadShareableData will handle it.
-        // If not importing, share.js->initShareFeatures->resetShareModuleStates will clear and then _createAndBroadcastChannel will make #general.
-        if (!importedWorkspaceState && window.shareModuleRef && typeof resetShareModuleStates === 'function') {
-             resetShareModuleStates(true); // True indicates host creation, though share.js doesn't use this param currently
-        }
+        // If not importing, share.js's initShareFeatures will handle creating default channel/doc.
+        // If importing, loadShareableData (called by initShareFeatures) loads the state.
+        // resetShareModuleStates is called within initShareFeatures if it's a fresh start.
+        // No need to call resetShareModuleStates here directly unless it's for a specific pre-join reset logic.
         joinRoomAndSetup();
     });
 }
@@ -623,8 +639,5 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 }
 
 // Initial state
-resetToSetupState();
-// initializeEmojiPicker is now called within share.js's initShareFeatures->initChat
-// if (window.shareModuleRef && window.shareModuleRef.initializeEmojiPicker) {
-//     window.shareModuleRef.initializeEmojiPicker();
-// }
+resetToSetupState(); // This also handles UI for initial setup.
+// initializeEmojiPicker is called within share.js's initChat if emoji elements are present.

@@ -1,6 +1,4 @@
-// media.js: Screen Share, Video Chat, Audio Chat
 
-// --- Global variables for media.js (scoped to this module) ---
 let localScreenShareStream;
 let localVideoCallStream;
 let localAudioStream;
@@ -8,12 +6,10 @@ let localAudioStream;
 let peerVideoElements = {}; // { peerId: { wrapper, video, stream, nicknameP } }
 let peerAudios = {}; // { peerId: audio_element }
 
-// --- Dependencies from main.js (will be set in initMediaFeatures) ---
 let roomApiDep, logStatusDep, showNotificationDep;
 let localGeneratedPeerIdDep;
 let getPeerNicknamesDep;
 
-// --- DOM Elements (selected within this module) ---
 let startShareBtn, stopShareBtn, remoteVideosContainer;
 let startVideoCallBtn, stopVideoCallBtn, localVideoContainer, localVideo, remoteVideoChatContainer;
 let startAudioCallBtn, stopAudioCallBtn, audioChatStatus;
@@ -90,8 +86,7 @@ function checkMediaCapabilities() {
 
 
 export function enableMediaButtons() {
-    checkMediaCapabilities(); // This will set initial disabled state based on support
-    // Then, enable if supported (will be overridden by checkMediaCapabilities if not supported)
+    checkMediaCapabilities();
     if(startShareBtn && startShareBtn.title !== "Screen sharing not supported") startShareBtn.disabled = false;
     if(stopShareBtn) stopShareBtn.disabled = true;
 
@@ -441,7 +436,6 @@ function handleIncomingAudioChatStream(stream, peerId) {
 }
 
 
-// --- General Media Handling (called by main.js) ---
 export function handleMediaPeerStream(stream, peerId, metadata) {
     if (metadata && metadata.streamType) {
         const streamType = metadata.streamType;
@@ -466,7 +460,6 @@ export async function stopAllLocalMedia(updateButtons = true) {
 }
 
 export function setupMediaForNewPeer(joinedPeerId) {
-    // Send existing local streams to the new peer
     if (localVideoCallStream && roomApiDep?.addStream) {
         roomApiDep.addStream(localVideoCallStream, [joinedPeerId], { streamType: 'videochat' });
     }
@@ -491,7 +484,7 @@ export function cleanupMediaForPeer(leftPeerId) {
     if (peerAudios[leftPeerId]) {
         peerAudios[leftPeerId].pause();
         peerAudios[leftPeerId].srcObject = null;
-        if (peerAudios[leftPeerId].parentNode) { // Remove from DOM if it has a parent
+        if (peerAudios[leftPeerId].parentNode) { 
             peerAudios[leftPeerId].remove();
         }
         delete peerAudios[leftPeerId];
@@ -503,7 +496,7 @@ export function resetMediaUIAndState() {
     if (localVideoCallStream) { localVideoCallStream.getTracks().forEach(t => t.stop()); localVideoCallStream = null; }
     if (localAudioStream) { localAudioStream.getTracks().forEach(t => t.stop()); localAudioStream = null; }
 
-    if(startShareBtn) { startShareBtn.title = ""; } // Title reset by checkMediaCapabilities
+    if(startShareBtn) { startShareBtn.title = ""; }
     if(remoteVideosContainer) remoteVideosContainer.innerHTML = '';
 
     if(localVideoContainer) localVideoContainer.classList.add('hidden');
@@ -517,7 +510,7 @@ export function resetMediaUIAndState() {
     });
     peerAudios = {};
     
-    enableMediaButtons(); // This will also call checkMediaCapabilities to set correct initial states
+    enableMediaButtons();
 }
 
 export function updatePeerNicknameInUI(peerId, newNickname) {
