@@ -30,11 +30,15 @@ jobs:
       id: extract_sha
       run: echo "sha_short=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
+    - name: Set lowercase repo name
+      id: repo_name
+      run: echo "repo_lower=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
         tags: |
-          ghcr.io/${{ github.repository }}:latest
-          ghcr.io/${{ github.repository }}:${{ steps.extract_sha.outputs.sha_short }}
+          ghcr.io/${{ steps.repo_name.outputs.repo_lower }}:latest
+          ghcr.io/${{ steps.repo_name.outputs.repo_lower }}:${{ steps.extract_sha.outputs.sha_short }}
