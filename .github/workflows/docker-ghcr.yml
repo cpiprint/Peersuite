@@ -1,4 +1,3 @@
-# .github/workflows/docker-ghcr.yml
 name: Build and Push to GHCR
 
 on:
@@ -8,8 +7,9 @@ on:
 jobs:
   call-reusable:
     uses: ./.github/workflows/reusable-build.yml
+    secrets:
+      registry_password: ${{ secrets.GITHUB_TOKEN }}
     with:
       registry: ghcr.io
       username: ${{ github.actor }}
-      password: ${{ secrets.GITHUB_TOKEN }}
       image_namespace: ghcr.io
