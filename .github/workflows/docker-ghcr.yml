@@ -1,8 +1,8 @@
-name: Build and Push to GHCR (dev branch)
+name: Build and Push to GHCR
 
 on:
   push:
-    branches: [dev]
+    branches: [main, dev]
 
 jobs:
   build-and-push:
@@ -34,12 +34,20 @@ jobs:
       id: repo_name
       run: echo "repo_lower=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
+    - name: Set image tags based on branch
+      id: image_tags
+      run: |
+        if [[ "${GITHUB_REF##*/}" == "main" ]]; then
+          echo "tags=ghcr.io/${{ steps.repo_name.outputs.repo_lower }}:latest,ghcr.io/${{ steps.repo_name.outputs.repo_lower }}:${{ steps.extract_sha.outputs.sha_short }}" >> $GITHUB_OUTPUT
+        else
+          # For dev branch, use a "dev" tag prefix + short SHA
+          echo "tags=ghcr.io/${{ steps.repo_name.outputs.repo_lower }}:dev,ghcr.io/${{ steps.repo_name.outputs.repo_lower }}:dev-${{ steps.extract_sha.outputs.sha_short }}" >> $GITHUB_OUTPUT
+        fi
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
         platforms: linux/amd64,linux/arm64
-        tags: |
-          ghcr.io/${{ steps.repo_name.outputs.repo_lower }}:latest
-          ghcr.io/${{ steps.repo_name.outputs.repo_lower }}:${{ steps.extract_sha.outputs.sha_short }}
+        tags: ${{ steps.image_tags.outputs.tags }}
