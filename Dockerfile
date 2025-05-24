@@ -5,6 +5,9 @@ COPY index.html /usr/share/nginx/html/
 COPY main.js /usr/share/nginx/html/
 COPY share.js /usr/share/nginx/html/
 COPY media.js /usr/share/nginx/html/
+COPY whiteboard.js /usr/share/nginx/html/
+COPY kanban.js /usr/share/nginx/html/
+COPY documents.js /usr/share/nginx/html/
 COPY trystero-torrent.min.js /usr/share/nginx/html/
 COPY peerspace.png /usr/share/nginx/html/
 # Add any other static assets like CSS files if they are separate
