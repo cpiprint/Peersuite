@@ -392,21 +392,38 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 
     <div id="setupSection" class="setup-controls-container card">
         <label for="nicknameInput">Username:</label>
-        <input type="text" id="nicknameInput" placeholder="Enter your nickname">
-        <label for="roomIdInput">Workspace Code:</label>
-        <input type="text" id="roomIdInput" placeholder="Enter Room Code (or leave blank to create)">
-        <label for="roomPasswordInput">Workspace Password:</label>
-        <input type="password" id="roomPasswordInput" placeholder="Enter workspace password">
+        <input type="text" id="nicknameInput" placeholder="Enter your username">
+        
         <div class="button-group">
             <button id="createPartyBtn" class="btn">Create Workspace</button>
-            <button id="joinLeaveRoomBtn" class="btn">Join Workspace</button>
+            <button id="joinWorkspaceBtn" class="btn">Join Workspace</button>
+            <button id="importWorkspaceBtn" class="btn">Import Workspace</button>
         </div>
-        <div class="button-group">
-             <button id="importWorkspaceBtn" class="btn">Import Workspace</button>
-             <input type="file" id="importFilePicker" class="hidden" accept=".peersuite_encrypted">
+        
+        <!-- Hidden fields that appear based on button clicks -->
+        <div id="createWorkspaceFields" class="hidden">
+            <label for="roomPasswordInput">Workspace Password:</label>
+            <input type="password" id="roomPasswordInput" placeholder="Enter workspace password">
+            <div class="button-group">
+                <button id="confirmCreateBtn" class="btn">Create</button>
+                <button id="cancelCreateBtn" class="btn">Cancel</button>
+            </div>
         </div>
+        
+        <div id="joinWorkspaceFields" class="hidden">
+            <label for="roomIdInput">Workspace Code:</label>
+            <input type="text" id="roomIdInput" placeholder="Enter Room Code">
+            <label for="joinPasswordInput">Workspace Password:</label>
+            <input type="password" id="joinPasswordInput" placeholder="Enter workspace password">
+            <div class="button-group">
+                <button id="confirmJoinBtn" class="btn">Join</button>
+                <button id="cancelJoinBtn" class="btn">Cancel</button>
+            </div>
+        </div>
+        
+        <input type="file" id="importFilePicker" class="hidden" accept=".peersuite_encrypted">
     </div>
-    <div id="status">Enter username. Create a workspace or enter a code to join. You can also import an existing workspace.</div>
+    <div id="status">Enter username and choose an action: Create, Join, or Import a workspace.</div>
 
     <div id="inRoomInterface" class="app-wrapper hidden">
         <nav class="sidebar-navigation">

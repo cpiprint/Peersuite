@@ -31,7 +31,14 @@ const nicknameInput = document.getElementById('nicknameInput');
 const roomIdInput = document.getElementById('roomIdInput');
 const roomPasswordInput = document.getElementById('roomPasswordInput');
 const createPartyBtn = document.getElementById('createPartyBtn');
-const joinLeaveRoomBtn = document.getElementById('joinLeaveRoomBtn');
+const joinWorkspaceBtn = document.getElementById('joinWorkspaceBtn');
+const createWorkspaceFields = document.getElementById('createWorkspaceFields');
+const joinWorkspaceFields = document.getElementById('joinWorkspaceFields');
+const confirmCreateBtn = document.getElementById('confirmCreateBtn');
+const cancelCreateBtn = document.getElementById('cancelCreateBtn');
+const confirmJoinBtn = document.getElementById('confirmJoinBtn');
+const cancelJoinBtn = document.getElementById('cancelJoinBtn');
+const joinPasswordInput = document.getElementById('joinPasswordInput');
 const statusDiv = document.getElementById('status');
 const importWorkspaceBtn = document.getElementById('importWorkspaceBtn');
 const importFilePicker = document.getElementById('importFilePicker');
@@ -287,10 +294,11 @@ async function joinRoomAndSetup() {
     if (!roomPassword) {
         logStatus("Workspace password is required.", true);
         if(createPartyBtn) createPartyBtn.disabled = false;
-        if(joinLeaveRoomBtn) { joinLeaveRoomBtn.disabled = false; joinLeaveRoomBtn.textContent = 'Join Workspace';}
+        if(joinWorkspaceBtn) joinWorkspaceBtn.disabled = false;
         if(nicknameInput) nicknameInput.disabled = false;
         if(roomIdInput) roomIdInput.disabled = false;
         if(roomPasswordInput) roomPasswordInput.disabled = false;
+        if(joinPasswordInput) joinPasswordInput.disabled = false;
         if(importWorkspaceBtn) importWorkspaceBtn.disabled = false;
         return;
     }
@@ -310,10 +318,11 @@ async function joinRoomAndSetup() {
         if (!roomIdToJoin) {
             logStatus("Room Code is required to join a workspace.", true);
             if(createPartyBtn) createPartyBtn.disabled = false;
-            if(joinLeaveRoomBtn) { joinLeaveRoomBtn.disabled = false; joinLeaveRoomBtn.textContent = 'Join Workspace'; }
+            if(joinWorkspaceBtn) joinWorkspaceBtn.disabled = false;
             if(nicknameInput) nicknameInput.disabled = false;
             if(roomIdInput) roomIdInput.disabled = false;
             if(roomPasswordInput) roomPasswordInput.disabled = false;
+            if(joinPasswordInput) joinPasswordInput.disabled = false;
             if(importWorkspaceBtn) importWorkspaceBtn.disabled = false;
             return;
         }
@@ -327,11 +336,14 @@ async function joinRoomAndSetup() {
     currentRoomId = sanitizedRoomId;
 
     logStatus(`Connecting to Workspace: ${currentRoomId} as ${localNickname}...`);
-    if(joinLeaveRoomBtn) { joinLeaveRoomBtn.textContent = 'Connecting...'; joinLeaveRoomBtn.disabled = true; }
+    if(confirmCreateBtn) confirmCreateBtn.disabled = true;
+    if(confirmJoinBtn) confirmJoinBtn.disabled = true;
     if(createPartyBtn) createPartyBtn.disabled = true;
+    if(joinWorkspaceBtn) joinWorkspaceBtn.disabled = true;
     if(nicknameInput) nicknameInput.disabled = true;
     if(roomIdInput) roomIdInput.disabled = true;
     if(roomPasswordInput) roomPasswordInput.disabled = true;
+    if(joinPasswordInput) joinPasswordInput.disabled = true;
     if(importWorkspaceBtn) importWorkspaceBtn.disabled = true;
 
     try {
@@ -473,8 +485,6 @@ async function joinRoomAndSetup() {
         
         // updateChatMessageInputPlaceholder is handled by share.js internally via setActiveChannel
 
-        if(joinLeaveRoomBtn) { joinLeaveRoomBtn.textContent = 'Leave Workspace'; joinLeaveRoomBtn.disabled = false; }
-
         if (window.mediaModuleRef && window.mediaModuleRef.enableMediaButtons) window.mediaModuleRef.enableMediaButtons();
 
         if (sendNickname) await sendNickname({ nickname: localNickname, initialJoin: true, isHost: isHost }, Object.keys(roomApi.getPeers()).filter(p => p !== localGeneratedPeerId));
@@ -540,13 +550,20 @@ function resetToSetupState() {
     if(setupSection) setupSection.classList.remove('hidden');
     if(statusDiv) statusDiv.classList.remove('hidden');
 
-    if(joinLeaveRoomBtn) { joinLeaveRoomBtn.textContent = 'Join Workspace'; joinLeaveRoomBtn.disabled = false; }
+    // Reset main buttons
     if(createPartyBtn) createPartyBtn.disabled = false;
+    if(joinWorkspaceBtn) joinWorkspaceBtn.disabled = false;
     if(importWorkspaceBtn) importWorkspaceBtn.disabled = false;
+    
+    // Reset and hide the conditional fields
+    if(createWorkspaceFields) createWorkspaceFields.classList.add('hidden');
+    if(joinWorkspaceFields) joinWorkspaceFields.classList.add('hidden');
+    
+    // Reset all form fields
     if(nicknameInput) nicknameInput.disabled = false;
-    if(roomIdInput) { roomIdInput.disabled = false; roomIdInput.placeholder = "Enter Room Code (or leave blank to create)"; }
+    if(roomIdInput) { roomIdInput.disabled = false; roomIdInput.value = ''; }
     if(roomPasswordInput) { roomPasswordInput.disabled = false; roomPasswordInput.value = ''; }
-
+    if(joinPasswordInput) { joinPasswordInput.disabled = false; joinPasswordInput.value = ''; }
 
     if (window.mediaModuleRef && window.mediaModuleRef.resetMediaUIAndState) window.mediaModuleRef.resetMediaUIAndState();
     
@@ -559,7 +576,7 @@ function resetToSetupState() {
     if(userListUl) userListUl.innerHTML = '';
     if (userCountSpan) userCountSpan.textContent = '0';
 
-    logStatus('Enter nickname, workspace code, and password. Create, join, or import a workspace.');
+    logStatus('Enter username and choose an action: Create, Join, or Import a workspace.');
 
     sidebarButtons.forEach(btn => {
         if (btn.id !== 'exportWorkspaceBtnSidebar') btn.classList.remove('active');
@@ -582,23 +599,56 @@ function resetToSetupState() {
 // --- Event Listeners for Main Controls ---
 if (createPartyBtn) {
     createPartyBtn.addEventListener('click', () => {
+        // Hide join fields if visible
+        if (joinWorkspaceFields) joinWorkspaceFields.classList.add('hidden');
+        // Show create fields
+        if (createWorkspaceFields) createWorkspaceFields.classList.remove('hidden');
+        // Focus password field
+        if (roomPasswordInput) roomPasswordInput.focus();
+    });
+}
+
+if (joinWorkspaceBtn) {
+    joinWorkspaceBtn.addEventListener('click', () => {
+        // Hide create fields if visible
+        if (createWorkspaceFields) createWorkspaceFields.classList.add('hidden');
+        // Show join fields
+        if (joinWorkspaceFields) joinWorkspaceFields.classList.remove('hidden');
+        // Focus room code field
+        if (roomIdInput) roomIdInput.focus();
+    });
+}
+
+if (confirmCreateBtn) {
+    confirmCreateBtn.addEventListener('click', () => {
         isHost = true;
-        // If not importing, share.js's initShareFeatures will handle creating default channel/doc.
-        // If importing, loadShareableData (called by initShareFeatures) loads the state.
-        // resetShareModuleStates is called within initShareFeatures if it's a fresh start.
-        // No need to call resetShareModuleStates here directly unless it's for a specific pre-join reset logic.
         joinRoomAndSetup();
     });
 }
 
-if (joinLeaveRoomBtn) {
-    joinLeaveRoomBtn.addEventListener('click', () => {
-        if (roomApi) {
-            leaveRoomAndCleanup();
-        } else {
-            isHost = false;
-            joinRoomAndSetup();
+if (confirmJoinBtn) {
+    confirmJoinBtn.addEventListener('click', () => {
+        isHost = false;
+        // Copy join password to main password field for compatibility
+        if (joinPasswordInput && roomPasswordInput) {
+            roomPasswordInput.value = joinPasswordInput.value;
         }
+        joinRoomAndSetup();
+    });
+}
+
+if (cancelCreateBtn) {
+    cancelCreateBtn.addEventListener('click', () => {
+        if (createWorkspaceFields) createWorkspaceFields.classList.add('hidden');
+        if (roomPasswordInput) roomPasswordInput.value = '';
+    });
+}
+
+if (cancelJoinBtn) {
+    cancelJoinBtn.addEventListener('click', () => {
+        if (joinWorkspaceFields) joinWorkspaceFields.classList.add('hidden');
+        if (roomIdInput) roomIdInput.value = '';
+        if (joinPasswordInput) joinPasswordInput.value = '';
     });
 }
 
