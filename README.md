@@ -11,7 +11,7 @@ The tools included are chat with file sending, collaborative document editing, a
 
 If this is something you would like to be a part of, please send a PR.
 
-Usage: You can use https://peersuite.space online, download a docker image and run peersuite yourself, or grab an executable from releases. 
+Usage: You can use https://peersuite.space online, download a docker image and run peersuite yourself, or grab an executable from [releases](https://github.com/openconstruct/Peersuite/releases). 
 
 ## Docker
 
