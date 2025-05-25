@@ -1,22 +1,21 @@
+// whiteboard.js
+
 // --- Global variables for whiteboard.js ---
 let wbCtx, wbIsDrawing = false, wbLastX, wbLastY;
 let currentWbTool = 'pen';
 let wbShapeStartX, wbShapeStartY;
 let whiteboardHistory = [];
-let wbZoomLevel = 1.0;
-let wbPanX = 0;
-let wbPanY = 0;
-const WB_MIN_ZOOM = 0.2;
-const WB_MAX_ZOOM = 5.0;
-const WB_ZOOM_STEP = 0.2;
+let wbTextInsertionPoint = null; // To store {x, y} for text insertion
 
 // --- Dependencies (will be set in initWhiteboardFeatures) ---
 let sendDrawCommandDep, sendInitialWhiteboardDep;
 let logStatusDep, showNotificationDep;
-let getPeerNicknamesDep, localGeneratedPeerIdDep; // For notifications
+let getPeerNicknamesDep, localGeneratedPeerIdDep;
 
-// --- DOM Elements (selected within this module) ---
-let whiteboardCanvas, wbColorPicker, wbLineWidth, wbClearBtn, wbLineWidthValue, wbToolPalette, wbZoomOutBtn, wbZoomLevelDisplay, wbZoomInBtn;
+// --- DOM Elements ---
+let whiteboardCanvas, wbColorPicker, wbLineWidth, wbClearBtn, wbLineWidthValue, wbToolPalette;
+let wbExportPngBtn;
+let wbTextInputArea, wbActualTextInput, wbSubmitTextBtn;
 
 function selectWhiteboardDomElements() {
     whiteboardCanvas = document.getElementById('whiteboardCanvas');
@@ -25,69 +24,130 @@ function selectWhiteboardDomElements() {
     wbClearBtn = document.getElementById('wbClearBtn');
     wbLineWidthValue = document.getElementById('wbLineWidthValue');
     wbToolPalette = document.querySelector('.wb-tool-palette');
-    wbZoomOutBtn = document.getElementById('wbZoomOutBtn');
-    wbZoomLevelDisplay = document.getElementById('wbZoomLevelDisplay');
-    wbZoomInBtn = document.getElementById('wbZoomInBtn');
+    wbExportPngBtn = document.getElementById('wbExportPngBtn');
+    wbTextInputArea = document.getElementById('wbTextInputArea');
+    wbActualTextInput = document.getElementById('wbActualTextInput');
+    wbSubmitTextBtn = document.getElementById('wbSubmitTextBtn');
 }
 
 export function initWhiteboardFeatures(dependencies) {
     selectWhiteboardDomElements();
 
     sendDrawCommandDep = dependencies.sendDrawCommand;
-    sendInitialWhiteboardDep = dependencies.sendInitialWhiteboard; 
+    sendInitialWhiteboardDep = dependencies.sendInitialWhiteboard;
     logStatusDep = dependencies.logStatus;
     showNotificationDep = dependencies.showNotification;
     getPeerNicknamesDep = dependencies.getPeerNicknames;
     localGeneratedPeerIdDep = dependencies.localGeneratedPeerId;
 
+    if (!whiteboardCanvas || !wbToolPalette) {
+        console.error("CRITICAL Whiteboard DOM elements (canvas or tool palette) not found. Whiteboard disabled.");
+        return {
+            handleDrawCommand: () => { if(logStatusDep) logStatusDep("WB Error: Attempted to use disabled whiteboard.", true); },
+            handleInitialWhiteboard: () => { if(logStatusDep) logStatusDep("WB Error: Attempted to use disabled whiteboard.", true); },
+            redrawWhiteboardFromHistoryIfVisible: () => { if(logStatusDep) logStatusDep("WB Error: Attempted to use disabled whiteboard.", true); },
+            resizeWhiteboardAndRedraw: () => { if(logStatusDep) logStatusDep("WB Error: Attempted to use disabled whiteboard.", true); },
+            getWhiteboardHistory: () => [], // Provide an empty array
+            loadWhiteboardData: () => { if(logStatusDep) logStatusDep("WB Error: Attempted to use disabled whiteboard.", true); },
+            resetWhiteboardState: () => { if(logStatusDep) logStatusDep("WB Error: Attempted to use disabled whiteboard.", true); },
+            sendInitialWhiteboardStateToPeer: () => { if(logStatusDep) logStatusDep("WB Error: Attempted to use disabled whiteboard.", true); }
+        };
+    }
 
-    if (!whiteboardCanvas || !wbColorPicker || !wbLineWidth || !wbClearBtn || !wbLineWidthValue || !wbToolPalette || !wbZoomOutBtn || !wbZoomLevelDisplay || !wbZoomInBtn) {
-        console.warn("Whiteboard DOM elements not found, Whiteboard feature might be partially disabled.");
-        
-    } else {
-        whiteboardCanvas.style.backgroundColor = '#FFFFFF'; 
-        wbCtx = whiteboardCanvas.getContext('2d');
-        resizeWhiteboardAndRedraw(); // Initial resize and draw
+    whiteboardCanvas.style.backgroundColor = '#FFFFFF';
+    wbCtx = whiteboardCanvas.getContext('2d');
+    resizeWhiteboardAndRedraw();
 
+    if (wbColorPicker) {
         wbColorPicker.addEventListener('change', (e) => { if (wbCtx) wbCtx.strokeStyle = e.target.value; });
-        wbLineWidth.addEventListener('input', (e) => { 
-            if (wbCtx) wbCtx.lineWidth = e.target.value; 
+    } else { console.warn("WB: Color picker not found."); }
+
+    if (wbLineWidth && wbLineWidthValue) {
+        wbLineWidth.addEventListener('input', (e) => {
+            if (wbCtx) wbCtx.lineWidth = parseFloat(e.target.value);
             if (wbLineWidthValue) wbLineWidthValue.textContent = `${e.target.value}px`;
         });
         if (wbLineWidthValue) wbLineWidthValue.textContent = `${wbLineWidth.value}px`;
+    } else { console.warn("WB: Line width controls not found."); }
+
+    if (wbClearBtn) {
         wbClearBtn.addEventListener('click', clearWhiteboardAndBroadcast);
+    } else { console.warn("WB: Clear button not found."); }
 
-        const toolButtons = wbToolPalette.querySelectorAll('.wb-tool-btn');
-        toolButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                toolButtons.forEach(btn => btn.classList.remove('active'));
-                button.classList.add('active');
-                currentWbTool = button.dataset.tool;
-                whiteboardCanvas.style.cursor = (currentWbTool === 'pen' || currentWbTool === 'rectangle' || currentWbTool === 'circle') ? 'crosshair' 
-                                             : (currentWbTool === 'eraser') ? 'grab' 
-                                             : 'default';
-            });
+    if (wbExportPngBtn) {
+        wbExportPngBtn.addEventListener('click', exportWhiteboardToPNG);
+    } else { console.warn("WB: Export button not found."); }
+    if (wbTextInputArea && wbActualTextInput && wbSubmitTextBtn) {
+        wbSubmitTextBtn.addEventListener('click', handleSubmitWbText);
+        wbActualTextInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSubmitWbText();
+            }
         });
-        const defaultToolButton = wbToolPalette.querySelector(`.wb-tool-btn[data-tool="${currentWbTool}"]`);
-        if (defaultToolButton) defaultToolButton.classList.add('active');
-        whiteboardCanvas.style.cursor = 'crosshair';
+    } else {
+        console.warn("WB: Text input elements (Area, Input, or Button) not found. Text tool may not function correctly.");
+    }
 
-        wbZoomInBtn.addEventListener('click', () => zoomWhiteboard(true));
-        wbZoomOutBtn.addEventListener('click', () => zoomWhiteboard(false));
-        updateZoomDisplay();
+    const toolButtons = wbToolPalette.querySelectorAll('.wb-tool-btn');
+    toolButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Check if text tool can be activated
+            if (button.dataset.tool === 'text' && (!wbTextInputArea || !wbActualTextInput || !wbSubmitTextBtn)) {
+                console.warn("WB: Text tool selected, but required input DOM elements are missing.");
+            }
 
-        ['mousedown', 'touchstart'].forEach(evt => whiteboardCanvas.addEventListener(evt, handleWbMouseDown, { passive: false }));
-        ['mousemove', 'touchmove'].forEach(evt => whiteboardCanvas.addEventListener(evt, handleWbMouseMove, { passive: false }));
-        ['mouseup', 'touchend', 'mouseout', 'touchcancel'].forEach(evt => whiteboardCanvas.addEventListener(evt, handleWbMouseUp));
-        
-        window.addEventListener('resize', resizeWhiteboardAndRedraw);
+            toolButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            const oldTool = currentWbTool;
+            currentWbTool = button.dataset.tool;
 
-        if (wbCtx) {
-            wbCtx.strokeStyle = wbColorPicker.value;
-            wbCtx.lineWidth = wbLineWidth.value;
-            wbCtx.lineCap = 'round';
-            wbCtx.lineJoin = 'round';
+    
+            if (currentWbTool !== 'text') { 
+                if(wbTextInputArea) wbTextInputArea.classList.add('hidden');
+                wbTextInsertionPoint = null; // Clear insertion point
+            } else {
+                 if (oldTool !== 'text' && wbTextInputArea && !wbTextInputArea.classList.contains('hidden')) {
+                    wbTextInputArea.classList.add('hidden');
+                }
+            }
+
+            switch (currentWbTool) {
+                case 'pen': case 'rectangle': case 'circle': case 'line':
+                    whiteboardCanvas.style.cursor = 'crosshair'; break;
+                case 'eraser':
+                    whiteboardCanvas.style.cursor = 'grab'; break; // Consider a custom eraser cursor image
+                case 'text':
+                    whiteboardCanvas.style.cursor = 'text'; break;
+                default: whiteboardCanvas.style.cursor = 'default';
+            }
+        });
+    });
+
+    const initialToolButton = wbToolPalette.querySelector(`.wb-tool-btn[data-tool="${currentWbTool}"]`);
+    if (initialToolButton) {
+        initialToolButton.classList.add('active');
+        switch (currentWbTool) {
+            case 'pen': case 'rectangle': case 'circle': case 'line': whiteboardCanvas.style.cursor = 'crosshair'; break;
+            case 'eraser': whiteboardCanvas.style.cursor = 'grab'; break;
+            case 'text': whiteboardCanvas.style.cursor = 'text'; break;
+            default: whiteboardCanvas.style.cursor = 'default';
         }
+    } else {
+         if(whiteboardCanvas) whiteboardCanvas.style.cursor = 'crosshair'; // Fallback
+    }
+
+    ['mousedown', 'touchstart'].forEach(evt => whiteboardCanvas.addEventListener(evt, handleWbMouseDown, { passive: false }));
+    ['mousemove', 'touchmove'].forEach(evt => whiteboardCanvas.addEventListener(evt, handleWbMouseMove, { passive: false }));
+    ['mouseup', 'touchend', 'mouseout', 'touchcancel'].forEach(evt => whiteboardCanvas.addEventListener(evt, handleWbMouseUp));
+
+    window.addEventListener('resize', resizeWhiteboardAndRedraw);
+
+    if (wbCtx) {
+        wbCtx.strokeStyle = (wbColorPicker && wbColorPicker.value) ? wbColorPicker.value : '#000000';
+        wbCtx.lineWidth = (wbLineWidth && wbLineWidth.value) ? parseFloat(wbLineWidth.value) : 3;
+        wbCtx.lineCap = 'round';
+        wbCtx.lineJoin = 'round';
     }
 
     return {
@@ -98,39 +158,12 @@ export function initWhiteboardFeatures(dependencies) {
         getWhiteboardHistory,
         loadWhiteboardData,
         resetWhiteboardState,
-        sendInitialWhiteboardStateToPeer 
+        sendInitialWhiteboardStateToPeer
     };
 }
 
-function updateZoomDisplay() {
-    if(wbZoomLevelDisplay) wbZoomLevelDisplay.textContent = `${Math.round(wbZoomLevel * 100)}%`;
-}
-
-function zoomWhiteboard(zoomIn) {
-    if (!whiteboardCanvas) return;
-    const oldZoom = wbZoomLevel;
-    const physCenterX = whiteboardCanvas.width / 2;
-    const physCenterY = whiteboardCanvas.height / 2;
-
-    const logCenterX_before = (physCenterX / oldZoom) + wbPanX;
-    const logCenterY_before = (physCenterY / oldZoom) + wbPanY;
-
-    if (zoomIn) {
-        wbZoomLevel = Math.min(WB_MAX_ZOOM, wbZoomLevel + WB_ZOOM_STEP);
-    } else {
-        wbZoomLevel = Math.max(WB_MIN_ZOOM, wbZoomLevel - WB_ZOOM_STEP);
-    }
-    wbZoomLevel = parseFloat(wbZoomLevel.toFixed(2));
-
-    wbPanX = logCenterX_before - (physCenterX / wbZoomLevel);
-    wbPanY = logCenterY_before - (physCenterY / wbZoomLevel);
-    
-    updateZoomDisplay();
-    redrawWhiteboardFromHistory();
-}
-
-function getWbPhysicalEventPosition(event) { 
-    if (!whiteboardCanvas) return {x:0, y:0};
+function getWbEventPosition(event) {
+    if (!whiteboardCanvas) return { x: 0, y: 0 };
     const rect = whiteboardCanvas.getBoundingClientRect();
     let clientX, clientY;
     if (event.touches && event.touches.length > 0) {
@@ -143,180 +176,212 @@ function getWbPhysicalEventPosition(event) {
     return { x: clientX - rect.left, y: clientY - rect.top };
 }
 
-function getWbLogicalEventPosition(event) { 
-    const physicalPos = getWbPhysicalEventPosition(event);
-    return {
-        x: (physicalPos.x / wbZoomLevel) + wbPanX,
-        y: (physicalPos.y / wbZoomLevel) + wbPanY
-    };
-}
-
 function handleWbMouseDown(e) {
     if (!wbCtx) return;
     e.preventDefault();
-    const logicalPos = getWbLogicalEventPosition(e);
+    const pos = getWbEventPosition(e);
+
+    if (currentWbTool === 'text') {
+        if (!wbTextInputArea || !wbActualTextInput) {
+            console.error("WB: Text input elements not found in mousedown, cannot activate text tool.");
+            return;
+        }
+        wbIsDrawing = false;
+        wbTextInsertionPoint = { x: pos.x, y: pos.y }; 
+        
+        wbTextInputArea.classList.remove('hidden'); 
+        wbActualTextInput.value = '';
+        wbActualTextInput.focus();  
+        return; 
+    }
+
+    if(wbTextInputArea && !wbTextInputArea.classList.contains('hidden')) {
+        wbTextInputArea.classList.add('hidden');
+    }
+    wbTextInsertionPoint = null;
 
     wbIsDrawing = true;
-    wbLastX = logicalPos.x;
-    wbLastY = logicalPos.y;
+    wbLastX = pos.x;
+    wbLastY = pos.y;
 
-    if (currentWbTool === 'rectangle' || currentWbTool === 'circle') {
-        wbShapeStartX = logicalPos.x;
-        wbShapeStartY = logicalPos.y;
+    if (currentWbTool === 'rectangle' || currentWbTool === 'circle' || currentWbTool === 'line') {
+        wbShapeStartX = pos.x;
+        wbShapeStartY = pos.y;
     }
 }
 
+function handleSubmitWbText() {
+    if (!wbTextInsertionPoint || !wbActualTextInput || !wbTextInputArea) {
+        if(wbTextInputArea) wbTextInputArea.classList.add('hidden');
+        wbTextInsertionPoint = null;
+        return;
+    }
+    const textToDraw = wbActualTextInput.value;
+    if (textToDraw.trim() === "") {
+        wbActualTextInput.value = '';
+        wbActualTextInput.focus();
+        return;
+    }
+
+    const fontSize = 16;
+    const textCmd = {
+        type: 'text',
+        text: textToDraw,
+        x: wbTextInsertionPoint.x,
+        y: wbTextInsertionPoint.y,
+        color: (wbColorPicker && wbColorPicker.value) ? wbColorPicker.value : '#000000',
+        font: `${fontSize}px sans-serif`
+    };
+
+    redrawWhiteboardFromHistory(); 
+    applyDrawCommand(textCmd);
+    whiteboardHistory.push(textCmd);
+
+    if (sendDrawCommandDep) sendDrawCommandDep(textCmd);
+    if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('whiteboardSection');
+
+    wbActualTextInput.value = '';
+    wbActualTextInput.focus();  
+}
+
 function handleWbMouseMove(e) {
-    if (!wbIsDrawing || !wbCtx) return;
+    if (!wbIsDrawing || !wbCtx || currentWbTool === 'text') return;
     e.preventDefault();
-    const logicalPos = getWbLogicalEventPosition(e);
-    const currentLogicalX = logicalPos.x;
-    const currentLogicalY = logicalPos.y;
+    const pos = getWbEventPosition(e);
+    const currentX = pos.x;
+    const currentY = pos.y;
+    const currentToolColor = (wbColorPicker && wbColorPicker.value) ? wbColorPicker.value : '#000000';
+    const currentToolLineWidth = (wbLineWidth && wbLineWidth.value) ? parseFloat(wbLineWidth.value) : 3;
 
     if (currentWbTool === 'pen' || currentWbTool === 'eraser') {
         const drawCmdData = {
             type: currentWbTool,
             x0: wbLastX, y0: wbLastY,
-            x1: currentLogicalX, y1: currentLogicalY,
-            color: (currentWbTool === 'pen') ? wbColorPicker.value : '#FFFFFF',
-            lineWidth: (currentWbTool === 'pen') ? parseFloat(wbLineWidth.value) : Math.max(10, parseFloat(wbLineWidth.value) * 1.5)
+            x1: currentX, y1: currentY,
+            color: (currentWbTool === 'pen') ? currentToolColor : '#FFFFFF',
+            lineWidth: (currentWbTool === 'pen') ? currentToolLineWidth : Math.max(10, currentToolLineWidth * 1.5)
         };
         applyDrawCommand(drawCmdData);
         whiteboardHistory.push(drawCmdData);
         if (sendDrawCommandDep) sendDrawCommandDep(drawCmdData);
-        if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('whiteboardSection');
+    } else if (currentWbTool === 'rectangle' || currentWbTool === 'circle' || currentWbTool === 'line') {
+        redrawWhiteboardFromHistory();
+        let previewCmd = {};
+        if (currentWbTool === 'rectangle') {
+            previewCmd = { type: 'rectangle', x: wbShapeStartX, y: wbShapeStartY, width: currentX - wbShapeStartX, height: currentY - wbShapeStartY, color: currentToolColor, lineWidth: currentToolLineWidth };
+        } else if (currentWbTool === 'circle') {
+            const dX = currentX - wbShapeStartX; const dY = currentY - wbShapeStartY;
+            previewCmd = { type: 'circle', cx: wbShapeStartX, cy: wbShapeStartY, radius: Math.sqrt(dX * dX + dY * dY), color: currentToolColor, lineWidth: currentToolLineWidth };
+        } else if (currentWbTool === 'line') {
+            previewCmd = { type: 'line', x0: wbShapeStartX, y0: wbShapeStartY, x1: currentX, y1: currentY, color: currentToolColor, lineWidth: currentToolLineWidth };
+        }
+        applyDrawCommand(previewCmd);
     }
-    
-    wbLastX = currentLogicalX;
-    wbLastY = currentLogicalY;
+    wbLastX = currentX; wbLastY = currentY;
 }
 
 function handleWbMouseUp() {
-    if (!wbIsDrawing || !wbCtx) return;
-    
-    if (currentWbTool === 'rectangle') {
-        const logicalWidth = wbLastX - wbShapeStartX;
-        const logicalHeight = wbLastY - wbShapeStartY;
-        const rectCmd = {
-            type: 'rectangle', x: wbShapeStartX, y: wbShapeStartY, width: logicalWidth, height: logicalHeight,
-            color: wbColorPicker.value, lineWidth: parseFloat(wbLineWidth.value)
-        };
-        applyDrawCommand(rectCmd);
-        whiteboardHistory.push(rectCmd);
-        if (sendDrawCommandDep) sendDrawCommandDep(rectCmd);
-        if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('whiteboardSection');
-
-    } else if (currentWbTool === 'circle') {
-        const dLogicalX = wbLastX - wbShapeStartX;
-        const dLogicalY = wbLastY - wbShapeStartY;
-        const logicalRadius = Math.sqrt(dLogicalX * dLogicalX + dLogicalY * dLogicalY);
-        const circleCmd = {
-            type: 'circle', cx: wbShapeStartX, cy: wbShapeStartY, radius: logicalRadius,
-            color: wbColorPicker.value, lineWidth: parseFloat(wbLineWidth.value)
-        };
-        applyDrawCommand(circleCmd);
-        whiteboardHistory.push(circleCmd);
-        if (sendDrawCommandDep) sendDrawCommandDep(circleCmd);
-         if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('whiteboardSection');
+    if (!wbIsDrawing || !wbCtx || currentWbTool === 'text' || currentWbTool === 'pen' || currentWbTool === 'eraser') {
+        if (currentWbTool !== 'text') wbIsDrawing = false; 
+        return;
     }
-    
+
+    let finalShapeCmd = null;
+    const currentX = wbLastX; const currentY = wbLastY;
+    const currentToolColor = (wbColorPicker && wbColorPicker.value) ? wbColorPicker.value : '#000000';
+    const currentToolLineWidth = (wbLineWidth && wbLineWidth.value) ? parseFloat(wbLineWidth.value) : 3;
+
+    if (currentWbTool === 'rectangle') {
+        finalShapeCmd = { type: 'rectangle', x: wbShapeStartX, y: wbShapeStartY, width: currentX - wbShapeStartX, height: currentY - wbShapeStartY, color: currentToolColor, lineWidth: currentToolLineWidth };
+    } else if (currentWbTool === 'circle') {
+        const dX = currentX - wbShapeStartX; const dY = currentY - wbShapeStartY;
+        finalShapeCmd = { type: 'circle', cx: wbShapeStartX, cy: wbShapeStartY, radius: Math.sqrt(dX * dX + dY * dY), color: currentToolColor, lineWidth: currentToolLineWidth };
+    } else if (currentWbTool === 'line') {
+        finalShapeCmd = { type: 'line', x0: wbShapeStartX, y0: wbShapeStartY, x1: currentX, y1: currentY, color: currentToolColor, lineWidth: currentToolLineWidth };
+    }
+    if (finalShapeCmd) {
+        redrawWhiteboardFromHistory();
+        applyDrawCommand(finalShapeCmd); 
+        whiteboardHistory.push(finalShapeCmd);
+        if (sendDrawCommandDep) sendDrawCommandDep(finalShapeCmd);
+        if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('whiteboardSection');
+    }
     wbIsDrawing = false;
 }
 
 function applyDrawCommand(cmd) {
     if (!wbCtx || !whiteboardCanvas) return;
-
-    const originalStrokeStyle = wbCtx.strokeStyle;
-    const originalLineWidth = wbCtx.lineWidth;
-    const originalFillStyle = wbCtx.fillStyle;
-
-    const transformX = (logicalX) => (logicalX - wbPanX) * wbZoomLevel;
-    const transformY = (logicalY) => (logicalY - wbPanY) * wbZoomLevel;
-    const transformSize = (logicalSize) => logicalSize * wbZoomLevel;
-
-    wbCtx.strokeStyle = cmd.color || (wbColorPicker ? wbColorPicker.value : '#000000');
-    wbCtx.lineWidth = transformSize(cmd.lineWidth || (wbLineWidth ? parseFloat(wbLineWidth.value) : 3)); 
+    // Save context state
+    const originalStrokeStyle = wbCtx.strokeStyle, originalLineWidth = wbCtx.lineWidth, originalFillStyle = wbCtx.fillStyle,
+          originalFont = wbCtx.font, originalTextAlign = wbCtx.textAlign, originalTextBaseline = wbCtx.textBaseline,
+          originalLineCap = wbCtx.lineCap, originalLineJoin = wbCtx.lineJoin;
+    wbCtx.strokeStyle = cmd.color;
+    wbCtx.lineWidth = cmd.lineWidth; 
+    wbCtx.lineCap = 'round';
+    wbCtx.lineJoin = 'round';
 
     switch (cmd.type) {
-        case 'pen': case 'draw': 
-            wbCtx.beginPath();
-            wbCtx.moveTo(transformX(cmd.x0), transformY(cmd.y0));
-            wbCtx.lineTo(transformX(cmd.x1), transformY(cmd.y1));
-            wbCtx.stroke();
-            wbCtx.closePath();
-            break;
-        case 'eraser': case 'erase':
-            wbCtx.strokeStyle = '#FFFFFF';
-            wbCtx.lineWidth = transformSize(cmd.lineWidth); 
-            wbCtx.beginPath();
-            wbCtx.moveTo(transformX(cmd.x0), transformY(cmd.y0));
-            wbCtx.lineTo(transformX(cmd.x1), transformY(cmd.y1));
-            wbCtx.stroke();
-            wbCtx.closePath();
-            break;
+        case 'pen': case 'draw':
+            wbCtx.beginPath(); wbCtx.moveTo(cmd.x0, cmd.y0); wbCtx.lineTo(cmd.x1, cmd.y1); wbCtx.stroke(); break;
+        case 'eraser':
+            wbCtx.strokeStyle = '#FFFFFF'; // Eraser color
+            wbCtx.beginPath(); wbCtx.moveTo(cmd.x0, cmd.y0); wbCtx.lineTo(cmd.x1, cmd.y1); wbCtx.stroke(); break;
         case 'rectangle':
-            wbCtx.beginPath();
-            wbCtx.rect(transformX(cmd.x), transformY(cmd.y), transformSize(cmd.width), transformSize(cmd.height));
-            wbCtx.stroke();
-            wbCtx.closePath();
-            break;
+            let rX = cmd.x, rY = cmd.y, rW = cmd.width, rH = cmd.height;
+            if (rW < 0) { rX = cmd.x + rW; rW = -rW; } if (rH < 0) { rY = cmd.y + rH; rH = -rH; }
+            wbCtx.beginPath(); wbCtx.rect(rX, rY, rW, rH); wbCtx.stroke(); break;
         case 'circle':
-            wbCtx.beginPath();
-            wbCtx.arc(transformX(cmd.cx), transformY(cmd.cy), transformSize(cmd.radius), 0, 2 * Math.PI);
-            wbCtx.stroke();
-            wbCtx.closePath();
-            break;
+            wbCtx.beginPath(); wbCtx.arc(cmd.cx, cmd.cy, Math.abs(cmd.radius), 0, 2 * Math.PI); wbCtx.stroke(); break;
+        case 'line':
+            wbCtx.beginPath(); wbCtx.moveTo(cmd.x0, cmd.y0); wbCtx.lineTo(cmd.x1, cmd.y1); wbCtx.stroke(); break;
+        case 'text':
+            wbCtx.fillStyle = cmd.color; wbCtx.font = cmd.font;
+            wbCtx.textAlign = 'left'; wbCtx.textBaseline = 'top';
+            wbCtx.fillText(cmd.text, cmd.x, cmd.y); break;
         case 'clear':
-            wbCtx.fillStyle = '#FFFFFF';
-            wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
-            wbPanX = 0; wbPanY = 0; wbZoomLevel = 1.0;
-            updateZoomDisplay();
-            break;
-        default: console.warn("Unknown draw command type:", cmd.type);
+            wbCtx.fillStyle = '#FFFFFF'; wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height); break;
+        default: console.warn("WB: Unknown draw command type:", cmd.type);
     }
-
-    wbCtx.strokeStyle = originalStrokeStyle;
-    wbCtx.lineWidth = originalLineWidth;
-    wbCtx.fillStyle = originalFillStyle;
+    // Restore context state
+    wbCtx.strokeStyle = originalStrokeStyle; wbCtx.lineWidth = originalLineWidth; wbCtx.fillStyle = originalFillStyle;
+    wbCtx.font = originalFont; wbCtx.textAlign = originalTextAlign; wbCtx.textBaseline = originalTextBaseline;
+    wbCtx.lineCap = originalLineCap; wbCtx.lineJoin = originalLineJoin;
 }
 
 export function resizeWhiteboardAndRedraw() {
     if (!whiteboardCanvas || !whiteboardCanvas.offsetParent) return;
-    const displayWidth = whiteboardCanvas.clientWidth;
-    const displayHeight = whiteboardCanvas.clientHeight;
-    if (displayWidth <= 0 || displayHeight <= 0) return;
-
+    const displayWidth = whiteboardCanvas.clientWidth, displayHeight = whiteboardCanvas.clientHeight;
+    if (displayWidth <= 0 || displayHeight <= 0) return; 
     if (whiteboardCanvas.width !== displayWidth || whiteboardCanvas.height !== displayHeight) {
-        whiteboardCanvas.width = displayWidth;
-        whiteboardCanvas.height = displayHeight;
-    }
-    if (wbCtx) { 
-        wbCtx.fillStyle = '#FFFFFF';
-        wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
+        whiteboardCanvas.width = displayWidth; whiteboardCanvas.height = displayHeight;
     }
     redrawWhiteboardFromHistory();
 }
 
 function clearWhiteboardAndBroadcast() {
     const clearCmd = { type: 'clear' };
-    applyDrawCommand(clearCmd); 
-    whiteboardHistory = [clearCmd]; 
+    applyDrawCommand(clearCmd);
+    whiteboardHistory = [clearCmd];
     if (sendDrawCommandDep) sendDrawCommandDep(clearCmd);
     if (getPeerNicknamesDep && Object.keys(getPeerNicknamesDep()).length > 0 && showNotificationDep) showNotificationDep('whiteboardSection');
+    if(wbTextInputArea) wbTextInputArea.classList.add('hidden');
+    wbTextInsertionPoint = null;
 }
 
 function redrawWhiteboardFromHistory() {
     if (!wbCtx || !whiteboardCanvas || whiteboardCanvas.width === 0 || whiteboardCanvas.height === 0) {
         return;
     }
+    // Clear the canvas with white background
+    const originalFill = wbCtx.fillStyle;
     wbCtx.fillStyle = '#FFFFFF';
     wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
-    
-    wbCtx.strokeStyle = wbColorPicker ? wbColorPicker.value : '#000000'; 
-    wbCtx.lineWidth = wbLineWidth ? parseFloat(wbLineWidth.value) : 3;
+    wbCtx.fillStyle = originalFill;
+    wbCtx.strokeStyle = (wbColorPicker && wbColorPicker.value) ? wbColorPicker.value : '#000000';
+    wbCtx.lineWidth = (wbLineWidth && wbLineWidth.value) ? parseFloat(wbLineWidth.value) : 3;
     wbCtx.lineCap = 'round';
     wbCtx.lineJoin = 'round';
-    
+
     whiteboardHistory.forEach(cmd => {
         applyDrawCommand(cmd);
     });
@@ -324,18 +389,35 @@ function redrawWhiteboardFromHistory() {
 
 export function redrawWhiteboardFromHistoryIfVisible(force = false) {
     if (whiteboardCanvas && (whiteboardCanvas.offsetParent || force)) {
-        if (wbCtx) {
-            wbCtx.fillStyle = '#FFFFFF';
-            wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
+        if (whiteboardCanvas.width > 0 && whiteboardCanvas.height > 0) {
+            redrawWhiteboardFromHistory();
+        } else {
+            resizeWhiteboardAndRedraw();
         }
-        redrawWhiteboardFromHistory();
+    }
+}
+
+function exportWhiteboardToPNG() {
+    if (!whiteboardCanvas) { if (logStatusDep) logStatusDep("WB: Canvas not available for export.", true); return; }
+    try {
+        const dataURL = whiteboardCanvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = dataURL; link.download = `PeerSuite_Whiteboard_${new Date().toISOString().slice(0,10)}.png`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        if (logStatusDep) logStatusDep("WB: Exported as PNG.");
+    } catch (error) {
+        console.error("WB: Error exporting to PNG:", error);
+        if (logStatusDep) logStatusDep("WB: Error exporting: " + error.message, true);
     }
 }
 
 export function handleDrawCommand(cmd, peerId) {
-    applyDrawCommand(cmd); 
+    if (wbIsDrawing && (currentWbTool === 'rectangle' || currentWbTool === 'circle' || currentWbTool === 'line')) {
+        redrawWhiteboardFromHistory();
+    }
+    applyDrawCommand(cmd);
     if (cmd.type === 'clear') {
-        whiteboardHistory = [cmd]; 
+        whiteboardHistory = [cmd];
     } else if (!whiteboardHistory.find(c => JSON.stringify(c) === JSON.stringify(cmd))) { 
         whiteboardHistory.push(cmd);
     }
@@ -345,13 +427,10 @@ export function handleDrawCommand(cmd, peerId) {
 export function handleInitialWhiteboard(history, peerId, getIsHost) {
     if (getIsHost && !getIsHost()) {
         const nickname = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : 'host';
-        if(logStatusDep) logStatusDep(`Client: Received initial whiteboard history from ${nickname}, length: ${history.length}.`);
-
-        whiteboardHistory = history; 
-        wbZoomLevel = 1.0; wbPanX = 0; wbPanY = 0; 
-        updateZoomDisplay();
-        redrawWhiteboardFromHistoryIfVisible(true); 
-        if(logStatusDep) logStatusDep(`Client: Whiteboard state applied from ${nickname}.`);
+        if (logStatusDep) logStatusDep(`WB Client: Received initial history from ${nickname}, length: ${history.length}.`);
+        whiteboardHistory = history;
+        redrawWhiteboardFromHistoryIfVisible(true); // Force redraw
+        if (logStatusDep) logStatusDep(`WB Client: State applied from ${nickname}.`);
     }
 }
 
@@ -361,27 +440,32 @@ export function getWhiteboardHistory() {
 
 export function loadWhiteboardData(importedHistory) {
     whiteboardHistory = importedHistory || [];
-    wbZoomLevel = 1.0; wbPanX = 0; wbPanY = 0; 
-    if (wbZoomLevelDisplay) updateZoomDisplay();
+    redrawWhiteboardFromHistoryIfVisible(true);
 }
 
 export function resetWhiteboardState() {
-    whiteboardHistory = []; wbZoomLevel = 1.0; wbPanX = 0; wbPanY = 0;
-    if(wbZoomLevelDisplay) updateZoomDisplay();
-    if (wbCtx && whiteboardCanvas ) { 
-         wbCtx.fillStyle = '#FFFFFF';
-         wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height);
+    whiteboardHistory = [];
+    if (wbCtx && whiteboardCanvas) { 
+        const originalFill = wbCtx.fillStyle; wbCtx.fillStyle = '#FFFFFF';
+        wbCtx.fillRect(0, 0, whiteboardCanvas.width, whiteboardCanvas.height); wbCtx.fillStyle = originalFill;
     }
+    if (wbToolPalette) {
+        const toolButtons = wbToolPalette.querySelectorAll('.wb-tool-btn');
+        toolButtons.forEach(btn => btn.classList.remove('active'));
+        const defaultToolButton = wbToolPalette.querySelector(`.wb-tool-btn[data-tool="pen"]`);
+        if (defaultToolButton) defaultToolButton.classList.add('active');
+        currentWbTool = 'pen';
+        if (whiteboardCanvas) whiteboardCanvas.style.cursor = 'crosshair';
+    }
+
+    if(wbTextInputArea) wbTextInputArea.classList.add('hidden');
+    if(wbActualTextInput) wbActualTextInput.value = '';
+    wbTextInsertionPoint = null;
 }
 
 export function sendInitialWhiteboardStateToPeer(peerId, getIsHost) {
     if (getIsHost && getIsHost() && sendInitialWhiteboardDep) {
-        if (whiteboardHistory.length > 0) {
-            if(logStatusDep) logStatusDep(`Host: Sending whiteboard history to peer ${peerId.substring(0,6)}, length: ${whiteboardHistory.length}`);
-            sendInitialWhiteboardDep(whiteboardHistory, peerId);
-        } else {
-            if(logStatusDep) logStatusDep(`Host: Sending EMPTY whiteboard history to peer ${peerId.substring(0,6)}`);
-            sendInitialWhiteboardDep([], peerId);
-        }
+        if (logStatusDep) logStatusDep(`WB Host: Sending history to peer ${peerId.substring(0,6)}, length: ${whiteboardHistory.length}`);
+        sendInitialWhiteboardDep(whiteboardHistory, peerId);
     }
 }

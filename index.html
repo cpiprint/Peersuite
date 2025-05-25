@@ -110,7 +110,14 @@ body {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: box-shadow var(--transition-normal), transform var(--transition-normal);
 }
+.card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
 .btn {
   padding: 0.5rem 1rem; 
   border: none;
@@ -120,9 +127,15 @@ body {
   font-weight: 500; 
   font-size: 0.9rem;
   border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  transition: all var(--transition-fast);
 }
-.btn:hover { background-color: var(--accent-hover); }
-.btn:disabled { background-color: var(--border-color); cursor: not-allowed; opacity: 0.7; }
+.btn:hover { 
+  background-color: var(--accent-hover); 
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.16), 0 2px 4px rgba(0, 0, 0, 0.32);
+  transform: translateY(-1px);
+}
+.btn:disabled { background-color: var(--border-color); cursor: not-allowed; opacity: 0.7; transform: none; }
 .btn-danger { background-color: var(--danger-color); }
 .btn-danger:hover { background-color: var(--danger-hover); }
 
@@ -142,15 +155,42 @@ body {
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   display: flex; flex-direction: column; gap: var(--space-xs);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 .app-header h1 { display: flex; justify-content: space-between; align-items: center; font-size: 1.4rem; }
 .header-context-area { display: flex; flex-direction: column; gap: var(--space-xs); font-size: 0.85em; }
 #headerRoomInfoDisplay { display: flex; gap: var(--space-sm); align-items: center; color: var(--text-secondary); flex-wrap: wrap; }
 #headerRoomInfoDisplay strong { color: var(--text-primary); margin-right: var(--space-xs); }
 
+/* Loading Status Bar */
+#loadingStatusBar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+  padding: var(--space-sm) var(--space-md);
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 500;
+  z-index: 1000;
+  transform: translateY(-100%);
+  transition: transform var(--transition-normal);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+#loadingStatusBar.show {
+  transform: translateY(0);
+}
+#loadingStatusBar.show ~ .container {
+  padding-top: 44px;
+  transition: padding-top var(--transition-normal);
+}
+
 /* Setup */
 .setup-controls-container {
   padding: var(--space-lg); margin: var(--space-lg) auto; max-width: 500px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 #status {
   padding: var(--space-xs) var(--space-sm); background-color: var(--info-bg);
@@ -164,16 +204,30 @@ body {
   background-color: var(--bg-secondary); padding: var(--space-md) var(--space-sm);
   border-right: 1px solid var(--border-color); gap: var(--space-xs);
   flex-shrink: 0; height: 100%; overflow-y: auto;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
 }
 .sidebar-button {
   padding: var(--space-md); border: none; background-color: transparent;
   color: var(--text-secondary); font-weight: 500; text-align: left; width: 100%;
-  transition: color var(--transition-fast), background-color var(--transition-fast);
+  transition: all var(--transition-fast);
   position: relative; display: flex; align-items: center; border-radius: var(--radius-sm);
+  border: 1px solid transparent;
 }
-.sidebar-button:hover { color: var(--accent-color); background-color: var(--user-hover); }
-.sidebar-button.active { color: white; background-color: var(--primary); }
-.sidebar-button.active:hover { background-color: var(--primary-dark); }
+.sidebar-button:hover { 
+  color: var(--accent-color); 
+  background-color: var(--user-hover); 
+  border-color: var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.sidebar-button.active { 
+  color: white; 
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  border-color: var(--primary);
+  box-shadow: 0 2px 4px rgba(0, 120, 215, 0.3);
+}
+.sidebar-button.active:hover { 
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+}
 .sidebar-button .icon { margin-right: var(--space-md); }
 .notification-dot {
   width: 8px; height: 8px; background-color: var(--notification-dot-color);
@@ -188,6 +242,7 @@ body {
   border: 1px solid var(--border-color); border-radius: var(--radius-md);
   display: flex; flex-direction: column; gap: var(--space-md);
   flex-grow: 1; min-height: 0; overflow: hidden; height: 100%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* Form Elements */
@@ -196,18 +251,21 @@ input[type="file"], textarea {
   padding: var(--space-sm) var(--space-md); margin-bottom: var(--space-md);
   font-size: 0.95rem; background-color: var(--bg-secondary); color: var(--text-primary);
   border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: all var(--transition-fast);
 }
 input[type="text"], input[type="password"] { height: 34px; width: 100%; }
 textarea { width: 100%; min-height: 60px; resize: vertical; }
 input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
   outline: none; border-color: var(--accent-color);
-  box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15); 
+  box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15), inset 0 1px 3px rgba(0, 0, 0, 0.06); 
 }
 input::placeholder, textarea::placeholder { color: var(--text-secondary); opacity: 0.8; }
 
 /* Button Groups */
 .button-group { margin-bottom: var(--space-md); display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: center; }
-.section-pane > .button-group { margin-bottom: 0; }
+.section-pane > .button-group { margin-bottom: 0; } /* Remove bottom margin if it's the last element in a pane */
+
 
 /* Chat */
 #chatSection .chat-section-content {
@@ -232,6 +290,7 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   margin-bottom: var(--space-md); padding: var(--space-md); word-wrap: break-word;
   max-width: 85%; position: relative; animation: fadeIn 0.2s ease-out;
   border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 .message.self { background-color: var(--self-message); text-align: right; margin-left: auto; }
 .message.other { background-color: var(--other-message); margin-right: auto; }
@@ -254,10 +313,19 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   padding: var(--space-sm) var(--space-md); cursor: pointer;
   border-bottom: 1px solid var(--border-color); font-size: 0.9em;
   display: flex; justify-content: space-between; align-items: center; border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
 }
 .channel-list-item:last-child { border-bottom: none; }
-.channel-list-item:hover { background-color: var(--user-hover); }
-.channel-list-item.active { background-color: var(--accent-color); color: white; font-weight: 600; }
+.channel-list-item:hover { 
+  background-color: var(--user-hover); 
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.channel-list-item.active { 
+  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%); 
+  color: white; 
+  font-weight: 600; 
+  box-shadow: 0 2px 4px rgba(0, 120, 215, 0.3);
+}
 .add-channel-controls { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: auto; }
 .add-channel-controls input[type="text"] { margin-bottom: 0; }
 
@@ -265,10 +333,18 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   list-style-type: none; max-height: 300px; overflow-y: auto;
   scrollbar-width: thin; scrollbar-color: var(--text-secondary) transparent;
 }
-#userList li { padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--border-color); font-size: 0.9em; }
+#userList li { 
+  padding: var(--space-sm) var(--space-md); 
+  border-bottom: 1px solid var(--border-color); 
+  font-size: 0.9em; 
+  transition: background-color var(--transition-fast);
+}
 #userList li:last-child { border-bottom: none; }
 #userList li.peer-name { cursor: pointer; display: flex; align-items: center; }
-#userList li.peer-name:hover { background-color: var(--user-hover); }
+#userList li.peer-name:hover { 
+  background-color: var(--user-hover); 
+  border-radius: var(--radius-sm);
+}
 #userList li.peer-name::before { content: "💬"; margin-right: var(--space-sm); font-size: 0.9em; }
 
 /* Video */
@@ -276,20 +352,134 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 .remote-videos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-md); flex-grow: 1; }
 .remote-video-wrapper { padding: var(--space-md); }
 
-/* Whiteboard */
-.whiteboard-canvas-container {
-  flex-grow: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
-  padding: var(--space-sm); background-color: var(--bg-card); 
-  border: 1px solid var(--border-color); border-radius: var(--radius-md);
+/* --- Whiteboard Specific Styles --- */
+#whiteboardSection { /* This is the main container for the whiteboard view */
+    display: flex;
+    flex-direction: column;
+    /* height: 100%; -- Already set by .content-section */
 }
-#whiteboardCanvas { cursor: crosshair; background-color: #FFFFFF; max-width: 100%; }
-.wb-tool-palette { display: flex; gap: var(--space-xs); padding: var(--space-xs); margin-right: var(--space-sm); }
+
+#whiteboardSection .button-group { /* The main toolbar for tools, color, width etc. */
+    flex-shrink: 0; /* Prevent this toolbar from shrinking */
+    margin-bottom: var(--space-sm); /* Space below this toolbar */
+}
+
+#whiteboardSection .button-group label { /* Align labels better */
+    margin-right: var(--space-xs);
+    vertical-align: middle;
+}
+
+#whiteboardSection .button-group input[type="color"] {
+    padding: 0; 
+    width: 38px;  /* Adjusted size - tweak as needed */
+    height: 38px; /* Adjusted size - tweak as needed */
+    border: 1px solid var(--border-color); 
+    border-radius: var(--radius-sm); 
+    cursor: pointer;
+    margin-bottom: 0; 
+    vertical-align: middle; 
+    -webkit-appearance: none; 
+    -moz-appearance: none; 
+    appearance: none; 
+    background-color: transparent; 
+}
+#whiteboardSection .button-group input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 2px; /* Add a little padding inside the wrapper */
+}
+#whiteboardSection .button-group input[type="color"]::-webkit-color-swatch {
+    border: none;
+    width: 100%; /* Swatch fills the wrapper */
+    height: 100%; /* Swatch fills the wrapper */
+    border-radius: calc(var(--radius-sm) - 2px); /* Adjust radius if wrapper has padding */
+}
+#whiteboardSection .button-group input[type="color"]::-moz-color-swatch {
+    border: none;
+    width: calc(100% - 4px); /* Adjust for potential internal Firefox padding */
+    height: calc(100% - 4px);
+    border-radius: calc(var(--radius-sm) - 2px);
+    margin: 2px; /* Center it if width/height are adjusted */
+}
+
+
+#whiteboardSection .button-group input[type="range"] {
+    vertical-align: middle;
+    margin-bottom: 0;
+}
+
+#whiteboardSection .button-group #wbLineWidthValue {
+    vertical-align: middle;
+    min-width: 30px; 
+    text-align: right; 
+    margin-left: var(--space-xs);
+}
+
+#wbTextInputArea { /* The toolbar for text input */
+    display: flex; 
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-sm); /* Space below text input before canvas */
+    align-items: center; 
+    flex-shrink: 0; /* Prevent this toolbar from shrinking */
+}
+#wbTextInputArea input[type="text"] {
+    flex-grow: 1; 
+    margin-bottom: 0; 
+    height: 34px; 
+}
+#wbTextInputArea button {
+    padding: 0.4rem 0.8rem; 
+    font-size: 0.85rem;
+}
+
+.whiteboard-canvas-container { /* Container for the canvas itself */
+  flex-grow: 1; /* Takes up remaining vertical space */
+  min-height: 0; /* Crucial for flex-grow to work correctly */
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  padding: var(--space-sm); 
+  background-color: var(--bg-card); 
+  border: 1px solid var(--border-color); 
+  border-radius: var(--radius-md);
+  position: relative; 
+  overflow: hidden; /* Prevents canvas from making container larger than it should be */
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+#whiteboardCanvas { 
+  background-color: #FFFFFF; 
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  /* width and height set by JS to match container's clientWidth/Height */
+}
+.wb-tool-palette { 
+  display: flex; 
+  gap: var(--space-xs); 
+  padding: var(--space-xs); 
+  margin-right: var(--space-sm); 
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
 .wb-tool-btn {
   background-color: transparent; border: 1px solid transparent; color: var(--text-primary);
   padding: var(--space-sm); font-size: 1.1rem; border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
 }
-.wb-tool-btn:hover { background-color: var(--user-hover); border-color: var(--border-color); }
-.wb-tool-btn.active { background-color: var(--accent-color); color: white; border-color: var(--accent-color); }
+.wb-tool-btn:hover { 
+  background-color: var(--user-hover); 
+  border-color: var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.wb-tool-btn.active { 
+  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%); 
+  color: white; 
+  border-color: var(--accent-color);
+  box-shadow: 0 2px 4px rgba(0, 120, 215, 0.3);
+}
+/* --- End of Whiteboard Specific Styles --- */
+
 
 /* Kanban */
 .kanban-board {
@@ -300,12 +490,19 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   background-color: var(--bg-secondary); padding: var(--space-md); width: 280px; 
   flex-shrink: 0; display: flex; flex-direction: column; border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 .kanban-column h3 { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-md); padding-bottom: var(--space-sm); border-bottom: 1px solid var(--border-color); }
 .kanban-cards { min-height: 100px; display: flex; flex-direction: column; gap: var(--space-md); flex-grow: 1; overflow-y: auto; }
 .kanban-card {
   padding: var(--space-md); cursor: grab; display: flex; justify-content: space-between;
   align-items: flex-start; border-left: 4px solid transparent; border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all var(--transition-fast);
+}
+.kanban-card:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
 }
 .kanban-card.priority-1 { border-left-color: var(--priority-low); }
 .kanban-card.priority-2 { border-left-color: var(--priority-medium); }
@@ -314,19 +511,43 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 .kanban-card.dragging { opacity: 0.5; border: 1px dashed var(--accent-color); }
 
 /* Documents */
-.document-management-bar { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-sm); flex-wrap: wrap; flex-shrink: 0; }
+.document-management-bar { 
+  display: flex; 
+  align-items: center; 
+  gap: var(--space-md); 
+  padding: var(--space-sm); 
+  flex-wrap: wrap; 
+  flex-shrink: 0; 
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
 #documentList { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
 .document-list-item {
   padding: var(--space-xs) var(--space-sm); cursor: pointer; font-size: 0.85rem;
-  border-radius: var(--radius-sm); transition: background-color var(--transition-fast);
+  border-radius: var(--radius-sm); transition: all var(--transition-fast);
+  border: 1px solid transparent;
 }
-.document-list-item:hover { background-color: var(--user-hover); }
-.document-list-item.active { background-color: var(--accent-color); color: white; font-weight: 600; }
+.document-list-item:hover { 
+  background-color: var(--user-hover); 
+  border-color: var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.document-list-item.active { 
+  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%); 
+  color: white; 
+  font-weight: 600; 
+  border-color: var(--accent-color);
+  box-shadow: 0 2px 4px rgba(0, 120, 215, 0.3);
+}
 #collaborativeEditor {
   flex-grow: 1; padding: var(--space-lg); overflow-y: auto; min-height: 150px; 
   line-height: 1.7; outline: none; border-radius: var(--radius-sm);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: border-color var(--transition-fast);
 }
-#collaborativeEditor:focus { border-color: var(--accent-color); }
+#collaborativeEditor:focus { 
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15), inset 0 1px 3px rgba(0, 0, 0, 0.06);
+}
 
 /* Theme Toggle */
 .theme-switch { display: flex; align-items: center; cursor: pointer; }
@@ -377,6 +598,10 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 </style>
 </head>
 <body>
+<div id="loadingStatusBar">
+    <span id="loadingStatusText">Loading...</span>
+</div>
+
 <div class="container">
     <div class="app-header">
         <h1>
@@ -400,7 +625,6 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
             <button id="importWorkspaceBtn" class="btn">Import Workspace</button>
         </div>
         
-        <!-- Hidden fields that appear based on button clicks -->
         <div id="createWorkspaceFields" class="hidden">
             <label for="roomPasswordInput">Workspace Password:</label>
             <input type="password" id="roomPasswordInput" placeholder="Enter workspace password">
@@ -537,21 +761,27 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 
             <div id="whiteboardSection" class="content-section hidden section-pane">
                 <h2>Collaborative Whiteboard</h2>
-                <div class="button-group">
+                <div class="button-group"> <!-- Main tools toolbar -->
                     <div class="wb-tool-palette card">
                         <button class="wb-tool-btn" data-tool="pen" title="Pen">✏️</button>
+                        <button class="wb-tool-btn" data-tool="line" title="Line">📏</button>
                         <button class="wb-tool-btn" data-tool="rectangle" title="Rectangle">▭</button>
                         <button class="wb-tool-btn" data-tool="circle" title="Circle">⚪</button>
+                        <button class="wb-tool-btn" data-tool="text" title="Text">T</button>
                         <button class="wb-tool-btn" data-tool="eraser" title="Eraser">🧼</button>
                     </div>
                     <label for="wbColorPicker">Color:</label> <input type="color" id="wbColorPicker" value="#000000">
                     <label for="wbLineWidth">Width:</label> <input type="range" id="wbLineWidth" min="1" max="30" value="3">
                     <span id="wbLineWidthValue" style="min-width: 30px; text-align: right;">3px</span>
-                    <button id="wbZoomOutBtn" class="btn" title="Zoom Out">➖</button>
-                    <span id="wbZoomLevelDisplay" class="card" style="min-width: 50px; text-align: center; padding: 0 var(--space-xs); height: 34px; display: inline-flex; align-items: center; justify-content: center;">100%</span>
-                    <button id="wbZoomInBtn" class="btn" title="Zoom In">➕</button>
                     <button id="wbClearBtn" class="btn">Clear Board</button>
+                    <button id="wbExportPngBtn" class="btn">Export PNG</button>
                 </div>
+
+                <div id="wbTextInputArea" class="hidden"> <!-- Text input specific toolbar -->
+                    <input type="text" id="wbActualTextInput" placeholder="Enter text...">
+                    <button id="wbSubmitTextBtn" class="btn">Add Text</button>
+                </div>
+
                 <div class="whiteboard-canvas-container">
                     <canvas id="whiteboardCanvas" width="640" height="360"></canvas>
                 </div>
@@ -590,6 +820,6 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
         </main>
     </div>
 </div>
-<script type="module" src="main.js"></script>
+<script type="module" src="main.js"></script> 
 </body>
 </html>
