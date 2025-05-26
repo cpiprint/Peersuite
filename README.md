@@ -7,7 +7,7 @@ Peer to peer workspace
 Peersuite is a open source, decentralized, private alternative to apps like discord or slack.
 All data is sent only between clients through encrypted WebRTC channels. There is no server.
 
-The tools included are chat with file sending, collaborative document editing, a kanban board, screen sharing, video calling, audio chat, and a shared whiteboard for drawing ideas.
+The tools included are full featured text chat, collaborative document editing, a kanban board, screen sharing, video calling, audio chat, and a shared whiteboard for drawing ideas.
 
 If this is something you would like to be a part of, please send a PR.
 
