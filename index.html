@@ -44,6 +44,8 @@
   --priority-medium: #ffee58;
   --priority-high: #ef5350;
   --priority-critical: #ab47bc;
+  --MAX_PREVIEW_DIM: 240px; /* For CSS fallback, JS sets inline style */
+  --MIN_PREVIEW_DIM: 140px; /* For CSS fallback */
 }
 
 [data-theme="dark"] {
@@ -307,6 +309,51 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   border-radius: var(--radius-sm);
 }
 
+/* Chat File Previews */
+.file-info-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.chat-file-preview-link { /* Style for the link wrapping the preview */
+  display: inline-block; /* Important for max-width/height on image to work well */
+  line-height: 0; /* Removes extra space below image if it's an inline-block */
+  cursor: pointer;
+  border-radius: var(--radius-sm); /* Apply border radius to link for better click area */
+  overflow: hidden; /* Ensures image border radius is clipped by link's */
+}
+.chat-file-preview-link:hover img {
+  opacity: 0.85;
+  box-shadow: 0 0 8px var(--accent-color);
+}
+.chat-file-preview {
+  max-width: var(--MAX_PREVIEW_DIM); 
+  max-height: var(--MAX_PREVIEW_DIM);
+  /* Actual width/height set by JS or auto for aspect ratio */
+  width: auto;  
+  height: auto; 
+  object-fit: cover; 
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm); 
+  display: block; /* Make image a block inside the link */
+  transition: opacity 0.2s ease, box-shadow 0.2s ease;
+}
+.message.self .file-info-container {
+  align-items: flex-end; /* Align preview to the right for self messages */
+}
+.message.other .file-info-container {
+  align-items: flex-start; /* Align preview to the left for other messages */
+}
+.file-text-info {
+  display: inline-block; 
+  font-size: 0.9em; 
+  color: var(--text-secondary);
+}
+.file-text-info strong {
+  color: var(--text-primary);
+}
+
+
 /* Channels & Users */
 .channel-list-container { max-height: 200px; overflow-y: auto; margin-bottom: var(--space-md); flex-grow: 1; }
 .channel-list-item {
@@ -353,26 +400,22 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 .remote-video-wrapper { padding: var(--space-md); }
 
 /* --- Whiteboard Specific Styles --- */
-#whiteboardSection { /* This is the main container for the whiteboard view */
+#whiteboardSection { 
     display: flex;
     flex-direction: column;
-    /* height: 100%; -- Already set by .content-section */
 }
-
-#whiteboardSection .button-group { /* The main toolbar for tools, color, width etc. */
-    flex-shrink: 0; /* Prevent this toolbar from shrinking */
-    margin-bottom: var(--space-sm); /* Space below this toolbar */
+#whiteboardSection .button-group { 
+    flex-shrink: 0; 
+    margin-bottom: var(--space-sm); 
 }
-
-#whiteboardSection .button-group label { /* Align labels better */
+#whiteboardSection .button-group label { 
     margin-right: var(--space-xs);
     vertical-align: middle;
 }
-
 #whiteboardSection .button-group input[type="color"] {
     padding: 0; 
-    width: 38px;  /* Adjusted size - tweak as needed */
-    height: 38px; /* Adjusted size - tweak as needed */
+    width: 38px;  
+    height: 38px; 
     border: 1px solid var(--border-color); 
     border-radius: var(--radius-sm); 
     cursor: pointer;
@@ -384,45 +427,41 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
     background-color: transparent; 
 }
 #whiteboardSection .button-group input[type="color"]::-webkit-color-swatch-wrapper {
-    padding: 2px; /* Add a little padding inside the wrapper */
+    padding: 2px; 
 }
 #whiteboardSection .button-group input[type="color"]::-webkit-color-swatch {
     border: none;
-    width: 100%; /* Swatch fills the wrapper */
-    height: 100%; /* Swatch fills the wrapper */
-    border-radius: calc(var(--radius-sm) - 2px); /* Adjust radius if wrapper has padding */
+    width: 100%; 
+    height: 100%; 
+    border-radius: calc(var(--radius-sm) - 2px); 
 }
 #whiteboardSection .button-group input[type="color"]::-moz-color-swatch {
     border: none;
-    width: calc(100% - 4px); /* Adjust for potential internal Firefox padding */
+    width: calc(100% - 4px); 
     height: calc(100% - 4px);
     border-radius: calc(var(--radius-sm) - 2px);
-    margin: 2px; /* Center it if width/height are adjusted */
+    margin: 2px; 
 }
-
-
 #whiteboardSection .button-group input[type="range"] {
     vertical-align: middle;
     margin-bottom: 0;
 }
-
 #whiteboardSection .button-group #wbLineWidthValue {
     vertical-align: middle;
     min-width: 30px; 
     text-align: right; 
     margin-left: var(--space-xs);
 }
-
-#wbTextInputArea { /* The toolbar for text input */
+#wbTextInputArea { 
     display: flex; 
     gap: var(--space-sm);
     padding: var(--space-sm);
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    margin-bottom: var(--space-sm); /* Space below text input before canvas */
+    margin-bottom: var(--space-sm); 
     align-items: center; 
-    flex-shrink: 0; /* Prevent this toolbar from shrinking */
+    flex-shrink: 0; 
 }
 #wbTextInputArea input[type="text"] {
     flex-grow: 1; 
@@ -433,10 +472,9 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
     padding: 0.4rem 0.8rem; 
     font-size: 0.85rem;
 }
-
-.whiteboard-canvas-container { /* Container for the canvas itself */
-  flex-grow: 1; /* Takes up remaining vertical space */
-  min-height: 0; /* Crucial for flex-grow to work correctly */
+.whiteboard-canvas-container { 
+  flex-grow: 1; 
+  min-height: 0; 
   display: flex; 
   align-items: center; 
   justify-content: center;
@@ -445,14 +483,13 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   border: 1px solid var(--border-color); 
   border-radius: var(--radius-md);
   position: relative; 
-  overflow: hidden; /* Prevents canvas from making container larger than it should be */
+  overflow: hidden; 
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 #whiteboardCanvas { 
   background-color: #FFFFFF; 
   border-radius: var(--radius-sm);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  /* width and height set by JS to match container's clientWidth/Height */
 }
 .wb-tool-palette { 
   display: flex; 

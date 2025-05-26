@@ -8,33 +8,33 @@ let currentActiveChannelId = null;
 
 
 // --- Imported Sub-Modules ---
-import { 
-    initKanbanFeatures, 
-    getKanbanData, 
-    loadKanbanData, 
-    resetKanbanState, 
-    handleKanbanUpdate as handleKanbanUpdateInternal, 
+import {
+    initKanbanFeatures,
+    getKanbanData,
+    loadKanbanData,
+    resetKanbanState,
+    handleKanbanUpdate as handleKanbanUpdateInternal,
     handleInitialKanban as handleInitialKanbanInternal,
     sendInitialKanbanStateToPeer,
     renderKanbanBoardIfActive as renderKanbanBoardIfActiveInternal
 } from './kanban.js';
 
-import { 
-    initWhiteboardFeatures, 
-    getWhiteboardHistory, 
-    loadWhiteboardData, 
-    resetWhiteboardState, 
-    handleDrawCommand as handleDrawCommandInternal, 
+import {
+    initWhiteboardFeatures,
+    getWhiteboardHistory,
+    loadWhiteboardData,
+    resetWhiteboardState,
+    handleDrawCommand as handleDrawCommandInternal,
     handleInitialWhiteboard as handleInitialWhiteboardInternal,
     sendInitialWhiteboardStateToPeer,
     redrawWhiteboardFromHistoryIfVisible as redrawWhiteboardFromHistoryIfVisibleInternal,
     resizeWhiteboardAndRedraw as resizeWhiteboardAndRedrawInternal
 } from './whiteboard.js';
 
-import { 
-    initDocumentFeatures, 
-    getDocumentShareData, 
-    loadDocumentData, 
+import {
+    initDocumentFeatures,
+    getDocumentShareData,
+    loadDocumentData,
     resetDocumentState,
     handleInitialDocuments as handleInitialDocumentsInternal,
     handleCreateDocument as handleCreateDocumentInternal,
@@ -65,6 +65,109 @@ let channelListDiv, newChannelNameInput, addChannelBtn; // For channels
 
 // --- Sub-module references ---
 let kanbanModuleRef, whiteboardModuleRef, documentModuleRef;
+
+
+// --- Image Preview Constants ---
+const IMAGE_MIME_TYPES = [
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/avif',
+    'image/svg+xml'
+];
+const MIN_PREVIEW_DIM = 140;
+const MAX_PREVIEW_DIM = 240;
+
+async function generateImagePreview(file) {
+    return new Promise((resolve) => {
+        if (!IMAGE_MIME_TYPES.includes(file.type)) {
+            resolve(null); // Not a supported image type
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                let newWidth, newHeight;
+                const originalWidth = img.width;
+                const originalHeight = img.height;
+                const aspectRatio = originalWidth / originalHeight;
+
+                // Determine the dominant dimension for scaling
+                if (originalWidth >= originalHeight) { // Landscape or square
+                    newWidth = Math.min(MAX_PREVIEW_DIM, Math.max(MIN_PREVIEW_DIM, originalWidth));
+                    newHeight = newWidth / aspectRatio;
+
+                    // If height becomes too small or too large after scaling width, rescale by height
+                    if (newHeight < MIN_PREVIEW_DIM && originalHeight >= MIN_PREVIEW_DIM) {
+                        newHeight = MIN_PREVIEW_DIM;
+                        newWidth = newHeight * aspectRatio;
+                    } else if (newHeight > MAX_PREVIEW_DIM) {
+                        newHeight = MAX_PREVIEW_DIM;
+                        newWidth = newHeight * aspectRatio;
+                    }
+                } else { // Portrait
+                    newHeight = Math.min(MAX_PREVIEW_DIM, Math.max(MIN_PREVIEW_DIM, originalHeight));
+                    newWidth = newHeight * aspectRatio;
+
+                    // If width becomes too small or too large, rescale by width
+                    if (newWidth < MIN_PREVIEW_DIM && originalWidth >= MIN_PREVIEW_DIM) {
+                        newWidth = MIN_PREVIEW_DIM;
+                        newHeight = newWidth / aspectRatio;
+                    } else if (newWidth > MAX_PREVIEW_DIM) {
+                        newWidth = MAX_PREVIEW_DIM;
+                        newHeight = newWidth / aspectRatio;
+                    }
+                }
+                
+                // Final clamp to MAX_PREVIEW_DIM after aspect ratio adjustments
+                if (newWidth > MAX_PREVIEW_DIM) {
+                    newWidth = MAX_PREVIEW_DIM;
+                    newHeight = newWidth / aspectRatio;
+                }
+                if (newHeight > MAX_PREVIEW_DIM) {
+                    newHeight = MAX_PREVIEW_DIM;
+                    newWidth = newHeight * aspectRatio;
+                }
+                                
+                newWidth = Math.max(1, Math.round(Math.min(MAX_PREVIEW_DIM, newWidth)));
+                newHeight = Math.max(1, Math.round(Math.min(MAX_PREVIEW_DIM, newHeight)));
+
+
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+                ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+                let previewDataURL;
+                if (file.type === 'image/gif') {
+                    // For GIFs, if we want them *resized* we MUST draw to canvas.
+                    // This means we only get the first frame for animated GIFs.
+                    previewDataURL = canvas.toDataURL('image/png'); // First frame as PNG
+                } else if (file.type === 'image/png' || file.type === 'image/svg+xml') {
+                     previewDataURL = canvas.toDataURL('image/png'); // Preserve transparency
+                } else {
+                     previewDataURL = canvas.toDataURL('image/jpeg', 0.75); // Quality 0.75
+                }
+                resolve(previewDataURL);
+            };
+            img.onerror = () => {
+                console.warn("Failed to load image for preview generation:", file.name);
+                resolve(null); // Error loading image
+            };
+            img.src = e.target.result;
+        };
+        reader.onerror = () => {
+            console.warn("Failed to read file for preview generation:", file.name);
+            resolve(null); // Error reading file
+        };
+        reader.readAsDataURL(file);
+    });
+}
 
 
 function selectChatDomElements() {
@@ -430,27 +533,73 @@ function displayMessage(msgObject, isSelf = false, isSystem = false) {
     } else if (fileMeta) {
         messageDiv.classList.add(isSelf ? 'self' : 'other');
         messageDiv.classList.add('file-message');
+        
         const senderSpan = document.createElement('span'); senderSpan.classList.add('sender');
         senderSpan.textContent = isSelf ? 'You' : senderNickname;
         messageDiv.appendChild(senderSpan);
-        const fileInfoSpan = document.createElement('span');
-        fileInfoSpan.innerHTML = `Shared a file: <strong>${fileMeta.name}</strong> (${(fileMeta.size / 1024).toFixed(2)} KB) `;
-        messageDiv.appendChild(fileInfoSpan);
+
+        const fileInfoContainer = document.createElement('div');
+        fileInfoContainer.classList.add('file-info-container');
+
+        const previewLink = document.createElement('a'); // Always create the link wrapper for preview
+        previewLink.classList.add('chat-file-preview-link');
+        previewLink.title = `Click to download ${fileMeta.name}`; // Initial title
         if (fileMeta.blobUrl) {
+            previewLink.href = fileMeta.blobUrl;
+            previewLink.download = fileMeta.name;
+        } else {
+            previewLink.href = "#"; // Placeholder, will be updated
+            previewLink.onclick = (e) => e.preventDefault(); // Prevent navigation if not ready
+        }
+
+        if (fileMeta.previewDataURL) {
+            const previewImg = document.createElement('img');
+            previewImg.src = fileMeta.previewDataURL;
+            previewImg.alt = `Preview of ${fileMeta.name}`;
+            previewImg.classList.add('chat-file-preview');
+            previewLink.appendChild(previewImg); // Add image inside the link
+            fileInfoContainer.appendChild(previewLink);
+        }
+
+        const fileTextInfoSpan = document.createElement('span');
+        fileTextInfoSpan.classList.add('file-text-info');
+        const fileNameStrong = document.createElement('strong');
+        fileNameStrong.textContent = fileMeta.name;
+        const fileSizeSpan = document.createTextNode(` (${(fileMeta.size / 1024).toFixed(2)} KB) `);
+        
+        fileTextInfoSpan.appendChild(document.createTextNode("Shared: "));
+        fileTextInfoSpan.appendChild(fileNameStrong);
+        fileTextInfoSpan.appendChild(fileSizeSpan);
+        
+        // Progress or general download link (if no preview)
+        if (!fileMeta.previewDataURL && fileMeta.blobUrl) { // No preview, but downloaded
             const downloadLink = document.createElement('a');
             downloadLink.href = fileMeta.blobUrl;
             downloadLink.download = fileMeta.name;
             downloadLink.textContent = 'Download';
-            messageDiv.appendChild(downloadLink);
-        } else if (fileMeta.receiving) {
+            fileTextInfoSpan.appendChild(downloadLink);
+        } else if (fileMeta.receiving || (!fileMeta.blobUrl && !isSelf)) {
             const progressSpan = document.createElement('span');
-            const safeSenderNickname = senderNickname ? senderNickname.replace(/\W/g, '') : 'unknownsender';
-            const safeFileName = fileMeta.name ? fileMeta.name.replace(/\W/g, '') : 'unknownfile';
-            progressSpan.id = `file-progress-${safeSenderNickname}-${safeFileName}`;
-            progressSpan.textContent = ` (Receiving 0%)`;
-            messageDiv.appendChild(progressSpan);
+            const safeSName = (isSelf ? (getLocalNicknameDep ? getLocalNicknameDep() : 'You') : senderNickname).replace(/\W/g, '');
+            const safeFName = fileMeta.name.replace(/\W/g, '');
+            progressSpan.id = `file-progress-${safeSName}-${safeFName}`;
+            
+            let initialProgressText = "";
+            if (isSelf && fileMeta.receiving) initialProgressText = ` (Sending 0%)`;
+            else if (!isSelf && !fileMeta.blobUrl) initialProgressText = ` (Receiving 0%)`;
+            
+            progressSpan.textContent = initialProgressText;
+            if(initialProgressText) fileTextInfoSpan.appendChild(progressSpan);
+        } else if (isSelf && !fileMeta.receiving && fileMeta.blobUrl && !fileMeta.previewDataURL) { // Self, sent, no preview
+             const sentSpan = document.createElement('span');
+             sentSpan.textContent = " (Sent)";
+             fileTextInfoSpan.appendChild(sentSpan);
         }
-    } else {
+
+        fileInfoContainer.appendChild(fileTextInfoSpan);
+        messageDiv.appendChild(fileInfoContainer);
+
+    } else { // Regular text message
         messageDiv.classList.add(isSelf ? 'self' : 'other');
         const senderSpan = document.createElement('span'); senderSpan.classList.add('sender');
         senderSpan.textContent = isSelf ? 'You' : senderNickname;
@@ -525,11 +674,24 @@ async function handleChatFileSelected(event) {
     const localCurrentNickname = getLocalNicknameDep ? getLocalNicknameDep() : 'You';
 
     if(logStatusDep) logStatusDep(`Preparing to send file: ${file.name}`);
-    const fileMeta = { name: file.name, type: file.type, size: file.size, id: Date.now().toString() };
- 
-    addMessageToHistoryAndDisplay({ senderNickname: localCurrentNickname, fileMeta: { ...fileMeta, receiving: true } }, true);
     
-    sendFileMetaDep(fileMeta); 
+    const previewDataURL = await generateImagePreview(file);
+
+    const fileMeta = { 
+        name: file.name, 
+        type: file.type, 
+        size: file.size, 
+        id: Date.now().toString(),
+        previewDataURL: previewDataURL 
+    };
+ 
+    addMessageToHistoryAndDisplay({ 
+        senderNickname: localCurrentNickname, 
+        fileMeta: { ...fileMeta, receiving: true, blobUrl: URL.createObjectURL(file) }, // Add blobUrl for self immediately for preview link
+        timestamp: Date.now() 
+    }, true);
+    
+    sendFileMetaDep(fileMeta); // Send meta (without local blobUrl for peers)
 
     const CHUNK_SIZE = 16 * 1024;
     let offset = 0;
@@ -554,7 +716,15 @@ async function handleChatFileSelected(event) {
             readNextChunk();
         } else {
             if(logStatusDep) logStatusDep(`File ${file.name} sent.`);
-            if (progressElem) progressElem.textContent = ` (Sent 100%)`;
+            const localMsgEntry = chatHistory.find(
+                msg => msg.senderPeerId === localGeneratedPeerIdDep && 
+                       msg.fileMeta && 
+                       msg.fileMeta.id === fileMeta.id
+            );
+            if (localMsgEntry && localMsgEntry.fileMeta) {
+                delete localMsgEntry.fileMeta.receiving; 
+                if (progressElem) progressElem.textContent = ` (Sent 100%)`;
+            }
         }
     };
     reader.onerror = (error) => {
@@ -597,7 +767,14 @@ export function handleFileMeta(meta, peerId) {
     const senderNickname = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : `Peer ${peerId.substring(0, 6)}`;
     const bufferKey = `${peerId}_${meta.id}`;
     incomingFileBuffers.set(bufferKey, { meta, chunks: [], receivedBytes: 0 });
-    addMessageToHistoryAndDisplay({ senderNickname, fileMeta: { ...meta, receiving: true }, senderPeerId: peerId, timestamp: Date.now() }, false);
+    
+    addMessageToHistoryAndDisplay({ 
+        senderNickname, 
+        fileMeta: { ...meta, receiving: true }, 
+        senderPeerId: peerId, 
+        timestamp: Date.now() 
+    }, false);
+
     if(logStatusDep) logStatusDep(`${senderNickname} is sending file: ${meta.name}`);
     if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('chatSection');
 }
@@ -621,24 +798,44 @@ export function handleFileChunk(chunk, peerId, chunkMeta) {
             const completeFile = new Blob(fileBuffer.chunks, { type: fileBuffer.meta.type });
             const blobUrl = URL.createObjectURL(completeFile);
 
+            const msgToUpdate = chatHistory.find(msg => 
+                msg.senderPeerId === peerId && 
+                msg.fileMeta && 
+                msg.fileMeta.id === fileBuffer.meta.id
+            );
+            if (msgToUpdate && msgToUpdate.fileMeta) {
+                msgToUpdate.fileMeta.blobUrl = blobUrl;
+                delete msgToUpdate.fileMeta.receiving;
+            }
+
             if (chatArea) {
-             
                 chatArea.querySelectorAll('.message.other.file-message').forEach(msgDiv => {
                     const senderSpan = msgDiv.querySelector('.sender');
-                    const fileInfoStrong = msgDiv.querySelector('strong');
-                    if (senderSpan && senderSpan.textContent === senderNickname && fileInfoStrong && fileInfoStrong.textContent === fileBuffer.meta.name) {
+                    const fileNameStrong = msgDiv.querySelector('.file-text-info strong');
+                    
+                    if (senderSpan && senderSpan.textContent === senderNickname && 
+                        fileNameStrong && fileNameStrong.textContent === fileBuffer.meta.name) {
+                        
                         const existingProgress = msgDiv.querySelector(`#${progressId}`);
                         if (existingProgress) existingProgress.remove();
                         
-                        let downloadLink = msgDiv.querySelector('a');
-                        if (!downloadLink) { 
-                            downloadLink = document.createElement('a');
-                            msgDiv.appendChild(document.createTextNode(" "));
-                            msgDiv.appendChild(downloadLink);
+                        const previewLinkElement = msgDiv.querySelector('a.chat-file-preview-link');
+                        if (previewLinkElement) {
+                            previewLinkElement.href = blobUrl;
+                            previewLinkElement.download = fileBuffer.meta.name;
+                            previewLinkElement.onclick = null; 
+                            previewLinkElement.title = `Download ${fileBuffer.meta.name}`;
+                        } else { 
+                            const fileTextInfo = msgDiv.querySelector('.file-text-info');
+                            if(fileTextInfo && !fileTextInfo.querySelector('a')) { 
+                                const downloadLink = document.createElement('a');
+                                downloadLink.href = blobUrl;
+                                downloadLink.download = fileBuffer.meta.name;
+                                downloadLink.textContent = 'Download';
+                                fileTextInfo.appendChild(document.createTextNode(" "));
+                                fileTextInfo.appendChild(downloadLink);
+                            }
                         }
-                        downloadLink.href = blobUrl;
-                        downloadLink.download = fileBuffer.meta.name;
-                        downloadLink.textContent = 'Download';
                     }
                 });
             }
