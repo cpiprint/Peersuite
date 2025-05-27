@@ -1,3 +1,4 @@
+// media.js
 
 let localScreenShareStream;
 let localVideoCallStream;
@@ -6,24 +7,34 @@ let localAudioStream;
 let peerVideoElements = {}; // { peerId: { wrapper, video, stream, nicknameP } }
 let peerAudios = {}; // { peerId: audio_element }
 
+// --- New global for local video preview element if it's in the grid ---
+let localVideoPreviewElement = null;
+
+
 let roomApiDep, logStatusDep, showNotificationDep;
 let localGeneratedPeerIdDep;
 let getPeerNicknamesDep;
 
+// --- DOM Elements ---
 let startShareBtn, stopShareBtn, remoteVideosContainer;
-let startVideoCallBtn, stopVideoCallBtn, localVideoContainer, localVideo, remoteVideoChatContainer;
+let localScreenSharePreviewContainer, localScreenSharePreviewVideo; // For screen share preview
+
+let startVideoCallBtn, stopVideoCallBtn, remoteVideoChatContainer;
+let toggleLocalVideoPreviewCheckbox; // For video call preview toggle
+
 let startAudioCallBtn, stopAudioCallBtn, audioChatStatus;
 
 function selectMediaDomElements() {
     startShareBtn = document.getElementById('startShareBtn');
     stopShareBtn = document.getElementById('stopShareBtn');
-    remoteVideosContainer = document.getElementById('remoteVideosContainer');
+    remoteVideosContainer = document.getElementById('remoteVideosContainer'); // For remote screen shares
+    localScreenSharePreviewContainer = document.getElementById('localScreenSharePreviewContainer');
+    localScreenSharePreviewVideo = document.getElementById('localScreenSharePreviewVideo');
 
     startVideoCallBtn = document.getElementById('startVideoCallBtn');
     stopVideoCallBtn = document.getElementById('stopVideoCallBtn');
-    localVideoContainer = document.getElementById('localVideoContainer');
-    localVideo = document.getElementById('localVideo');
-    remoteVideoChatContainer = document.getElementById('remoteVideoChatContainer');
+    remoteVideoChatContainer = document.getElementById('remoteVideoChatContainer'); // For video call grid
+    toggleLocalVideoPreviewCheckbox = document.getElementById('toggleLocalVideoPreviewCheckbox');
 
     startAudioCallBtn = document.getElementById('startAudioCallBtn');
     stopAudioCallBtn = document.getElementById('stopAudioCallBtn');
@@ -43,11 +54,25 @@ export function initMediaFeatures(dependencies) {
 
     if(startShareBtn) startShareBtn.addEventListener('click', startScreenSharing);
     if(stopShareBtn) stopShareBtn.addEventListener('click', () => stopLocalScreenShare(true));
+
     if(startVideoCallBtn) startVideoCallBtn.addEventListener('click', startLocalVideoCall);
     if(stopVideoCallBtn) stopVideoCallBtn.addEventListener('click', () => stopLocalVideoCall(true));
+
+    if (toggleLocalVideoPreviewCheckbox) {
+        toggleLocalVideoPreviewCheckbox.addEventListener('change', () => {
+            if (localVideoCallStream) { // Only toggle if stream exists
+                if (toggleLocalVideoPreviewCheckbox.checked) {
+                    addLocalVideoToGrid();
+                } else {
+                    removeLocalVideoFromGrid();
+                }
+            }
+        });
+    }
+
     if(startAudioCallBtn) startAudioCallBtn.addEventListener('click', startLocalAudioCall);
     if(stopAudioCallBtn) stopAudioCallBtn.addEventListener('click', () => stopLocalAudioCall(true));
-    
+
     checkMediaCapabilities();
 
     return {
@@ -75,7 +100,7 @@ function checkMediaCapabilities() {
         else startVideoCallBtn.title = "Start Video Call";
     }
     if(stopVideoCallBtn) stopVideoCallBtn.disabled = true;
-    
+
     if(startAudioCallBtn) {
         startAudioCallBtn.disabled = noGetUserMedia;
         if (noGetUserMedia) startAudioCallBtn.title = "Audio not supported";
@@ -92,10 +117,10 @@ export function enableMediaButtons() {
 
     if(startVideoCallBtn && startVideoCallBtn.title !== "Video/Audio not supported") startVideoCallBtn.disabled = false;
     if(stopVideoCallBtn) stopVideoCallBtn.disabled = true;
-    
+
     if(startAudioCallBtn && startAudioCallBtn.title !== "Audio not supported") startAudioCallBtn.disabled = false;
     if(stopAudioCallBtn) stopAudioCallBtn.disabled = true;
-    
+
     if (audioChatStatus) audioChatStatus.classList.add('hidden');
 }
 
@@ -112,8 +137,13 @@ async function startScreenSharing() {
 
         localScreenShareStream = await navigator.mediaDevices.getDisplayMedia({
             video: { cursor: "always" },
-            audio: true
+            audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 } // Example good audio settings for screen share
         });
+
+        if (localScreenSharePreviewVideo && localScreenSharePreviewContainer) {
+            localScreenSharePreviewVideo.srcObject = localScreenShareStream;
+            localScreenSharePreviewContainer.classList.remove('hidden');
+        }
 
         await roomApiDep.addStream(localScreenShareStream, null, { streamType: 'screenshare' });
         if(startShareBtn) startShareBtn.disabled = true;
@@ -131,6 +161,10 @@ async function startScreenSharing() {
             localScreenShareStream.getTracks().forEach(track => track.stop());
             localScreenShareStream = null;
         }
+        if (localScreenSharePreviewVideo && localScreenSharePreviewContainer) { // Also hide preview on error
+            localScreenSharePreviewVideo.srcObject = null;
+            localScreenSharePreviewContainer.classList.add('hidden');
+        }
         if (roomApiDep && startShareBtn && stopShareBtn) { startShareBtn.disabled = false; stopShareBtn.disabled = true; }
     }
 }
@@ -145,6 +179,12 @@ async function stopLocalScreenShare(updateButtons = true) {
         localScreenShareStream.getTracks().forEach(track => { track.onended = null; track.stop(); });
         localScreenShareStream = null;
     }
+
+    if (localScreenSharePreviewVideo && localScreenSharePreviewContainer) {
+        localScreenSharePreviewVideo.srcObject = null;
+        localScreenSharePreviewContainer.classList.add('hidden');
+    }
+
     if (updateButtons && roomApiDep && startShareBtn && stopShareBtn) {
         startShareBtn.disabled = (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) ? false : true;
         stopShareBtn.disabled = true;
@@ -167,7 +207,7 @@ function displayRemoteScreenShareStream(stream, peerId) {
     if (!videoContainer) {
         videoContainer = document.createElement('div');
         videoContainer.id = `container-screenshare-${peerId}`;
-        videoContainer.classList.add('remoteVideoContainer');
+        videoContainer.classList.add('remoteVideoContainer'); // CSS class for styling
 
         const peerInfo = document.createElement('p');
         peerInfo.textContent = `Screen from: ${streamPeerNickname}`;
@@ -177,12 +217,13 @@ function displayRemoteScreenShareStream(stream, peerId) {
         remoteVideo.id = `video-screenshare-${peerId}`;
         remoteVideo.autoplay = true;
         remoteVideo.playsinline = true;
-        remoteVideo.classList.add('remoteVideo');
         videoContainer.appendChild(remoteVideo);
 
         const maximizeBtn = document.createElement('button');
         maximizeBtn.textContent = 'Maximize';
-        maximizeBtn.classList.add('maximize-btn');
+        maximizeBtn.classList.add('maximize-btn', 'btn'); // Added 'btn' for styling
+        maximizeBtn.style.fontSize = '0.8em'; // Smaller button
+        maximizeBtn.style.padding = 'var(--space-xs) var(--space-sm)';
         maximizeBtn.onclick = () => {
             if (remoteVideo.requestFullscreen) remoteVideo.requestFullscreen();
             else if (remoteVideo.mozRequestFullScreen) remoteVideo.mozRequestFullScreen();
@@ -215,6 +256,51 @@ function displayRemoteScreenShareStream(stream, peerId) {
     showNotificationDep('screenShareSection');
 }
 
+// --- Helper functions for local video preview in grid ---
+function addLocalVideoToGrid() {
+    if (!localVideoCallStream || !remoteVideoChatContainer || localVideoPreviewElement) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.classList.add('remote-video-wrapper', 'local-preview-in-grid');
+    wrapper.id = `vc-wrapper-${localGeneratedPeerIdDep}`;
+
+    const nicknameP = document.createElement('p');
+    let localUserNickname = "You";
+    try { // Gracefully get nickname
+        const nicknames = getPeerNicknamesDep();
+        if (nicknames && nicknames[localGeneratedPeerIdDep]) {
+            localUserNickname = nicknames[localGeneratedPeerIdDep];
+        } else if (typeof getLocalNicknameDep === 'function' && getLocalNicknameDep()) { // Fallback to another getter if exists
+             localUserNickname = getLocalNicknameDep();
+        }
+    } catch(e) { console.warn("Could not get local nickname for preview:", e)}
+    nicknameP.textContent = localUserNickname + " (Preview)";
+
+
+    const videoEl = document.createElement('video');
+    videoEl.autoplay = true;
+    videoEl.playsinline = true;
+    videoEl.muted = true;
+    videoEl.srcObject = localVideoCallStream;
+
+    wrapper.appendChild(nicknameP);
+    wrapper.appendChild(videoEl);
+
+    // Add to the beginning of the grid if remoteVideoChatContainer exists
+    if (remoteVideoChatContainer.firstChild) {
+        remoteVideoChatContainer.insertBefore(wrapper, remoteVideoChatContainer.firstChild);
+    } else {
+        remoteVideoChatContainer.appendChild(wrapper);
+    }
+    localVideoPreviewElement = wrapper;
+}
+
+function removeLocalVideoFromGrid() {
+    if (localVideoPreviewElement && localVideoPreviewElement.parentNode) {
+        localVideoPreviewElement.remove();
+    }
+    localVideoPreviewElement = null;
+}
 
 // --- Video Chat ---
 async function startLocalVideoCall() {
@@ -227,8 +313,10 @@ async function startLocalVideoCall() {
         if (localVideoCallStream) await stopLocalVideoCall(true);
 
         localVideoCallStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        if(localVideo) localVideo.srcObject = localVideoCallStream;
-        if(localVideoContainer) localVideoContainer.classList.remove('hidden');
+
+        if (toggleLocalVideoPreviewCheckbox && toggleLocalVideoPreviewCheckbox.checked) {
+            addLocalVideoToGrid();
+        }
 
         await roomApiDep.addStream(localVideoCallStream, null, { streamType: 'videochat' });
 
@@ -238,15 +326,16 @@ async function startLocalVideoCall() {
         showNotificationDep('videoChatSection');
 
         localVideoCallStream.getTracks().forEach(track => {
-            track.onended = () => stopLocalVideoCall(true);
+            track.onended = () => {
+                stopLocalVideoCall(true);
+            };
         });
 
     } catch (err) {
         console.error("Error starting video call:", err);
         logStatusDep(`Error starting video call: ${err.name === 'NotAllowedError' ? 'Permission denied.' : err.message}`, true);
         if (localVideoCallStream) { localVideoCallStream.getTracks().forEach(track => track.stop()); localVideoCallStream = null; }
-        if(localVideoContainer) localVideoContainer.classList.add('hidden');
-        if(localVideo) localVideo.srcObject = null;
+        removeLocalVideoFromGrid();
         if (roomApiDep && startVideoCallBtn && stopVideoCallBtn) {
              startVideoCallBtn.disabled = (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) ? false : true;
              stopVideoCallBtn.disabled = true;
@@ -256,6 +345,8 @@ async function startLocalVideoCall() {
 
 async function stopLocalVideoCall(updateButtons = true) {
     logStatusDep("Stopping video call...");
+    removeLocalVideoFromGrid();
+
     if (localVideoCallStream) {
         if (roomApiDep?.removeStream) {
             try { await roomApiDep.removeStream(localVideoCallStream, null, { streamType: 'videochat' }); }
@@ -264,8 +355,8 @@ async function stopLocalVideoCall(updateButtons = true) {
         localVideoCallStream.getTracks().forEach(track => { track.onended = null; track.stop(); });
         localVideoCallStream = null;
     }
-    if(localVideo) localVideo.srcObject = null;
-    if(localVideoContainer) localVideoContainer.classList.add('hidden');
+
+    // if (toggleLocalVideoPreviewCheckbox) toggleLocalVideoPreviewCheckbox.checked = true; // Reset checkbox
 
     if (updateButtons && roomApiDep && startVideoCallBtn && stopVideoCallBtn) {
         startVideoCallBtn.disabled = (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) ? false : true;
@@ -274,7 +365,7 @@ async function stopLocalVideoCall(updateButtons = true) {
 }
 
 function handleIncomingVideoChatStream(stream, peerId) {
-    if (peerId === localGeneratedPeerIdDep) return;
+    if (peerId === localGeneratedPeerIdDep) return; // Local preview is handled by addLocalVideoToGrid
     const streamPeerNickname = getPeerNicknamesDep()[peerId] || `User ${peerId.substring(0, 6)}`;
     logStatusDep(`Receiving Video Chat stream from ${streamPeerNickname}.`);
 
@@ -295,7 +386,7 @@ function handleIncomingVideoChatStream(stream, peerId) {
         wrapper.appendChild(videoEl);
         if(remoteVideoChatContainer) remoteVideoChatContainer.appendChild(wrapper);
         else console.error("remoteVideoChatContainer not found for video chat.")
-        
+
         peerElement = { wrapper, video: videoEl, stream, nicknameP };
         peerVideoElements[peerId] = peerElement;
     }
@@ -310,14 +401,16 @@ function handleIncomingVideoChatStream(stream, peerId) {
 
     stream.onremovetrack = () => {
         if (stream.getTracks().length === 0 && peerVideoElements[peerId]) {
-            peerVideoElements[peerId].video.srcObject = null;
+            if (peerVideoElements[peerId].video) peerVideoElements[peerId].video.srcObject = null;
+            // Optionally remove wrapper or hide it:
+            // if (peerVideoElements[peerId].wrapper) peerVideoElements[peerId].wrapper.remove();
             logStatusDep(`Video chat stream ended from ${streamPeerNickname}`);
         }
     };
     stream.getTracks().forEach(track => {
         track.onended = () => {
             if ((!stream.active || stream.getTracks().every(t => t.readyState === 'ended')) && peerVideoElements[peerId]) {
-                peerVideoElements[peerId].video.srcObject = null;
+                if (peerVideoElements[peerId].video) peerVideoElements[peerId].video.srcObject = null;
                 logStatusDep(`Video chat track ended from ${streamPeerNickname}`);
             }
         };
@@ -349,7 +442,7 @@ async function startLocalAudioCall() {
             audioChatStatus.classList.remove('hidden');
         }
         showNotificationDep('audioChatSection');
-        
+
         localAudioStream.getTracks().forEach(track => {
             track.onended = () => stopLocalAudioCall(true);
         });
@@ -362,7 +455,7 @@ async function startLocalAudioCall() {
         else if (err.name === 'SecurityError') userMessage = "Microphone access denied (security). Page might need HTTPS.";
         else if (err.name === 'AbortError') userMessage = "Microphone request aborted (hardware error or conflict).";
         else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') userMessage = "Could not read from microphone (in use or hardware/driver issue).";
-        
+
         logStatusDep(userMessage, true);
         if (localAudioStream) { localAudioStream.getTracks().forEach(track => track.stop()); localAudioStream = null; }
         if (roomApiDep && startAudioCallBtn && stopAudioCallBtn) {
@@ -392,11 +485,11 @@ async function stopLocalAudioCall(updateButtons = true) {
 }
 
 function handleIncomingAudioChatStream(stream, peerId) {
-    if (peerId === localGeneratedPeerIdDep) return; 
+    if (peerId === localGeneratedPeerIdDep) return;
     const streamPeerNickname = getPeerNicknamesDep()[peerId] || `User ${peerId.substring(0, 6)}`;
     logStatusDep(`Receiving Audio Chat stream from ${streamPeerNickname}.`);
 
-    if (peerAudios[peerId]) { 
+    if (peerAudios[peerId]) {
         peerAudios[peerId].pause();
         peerAudios[peerId].srcObject = null;
     }
@@ -407,11 +500,11 @@ function handleIncomingAudioChatStream(stream, peerId) {
         document.body.appendChild(audioEl);
         peerAudios[peerId] = audioEl;
     }
-    
+
     audioEl.srcObject = stream;
-    audioEl.autoplay = true; 
+    audioEl.autoplay = true;
     audioEl.play().catch(e => console.warn(`Audio play failed for ${streamPeerNickname}:`, e));
-    
+
     audioEl.addEventListener('error', (e) => {
         console.error(`Error with audio element for ${streamPeerNickname}:`, e);
     });
@@ -484,7 +577,7 @@ export function cleanupMediaForPeer(leftPeerId) {
     if (peerAudios[leftPeerId]) {
         peerAudios[leftPeerId].pause();
         peerAudios[leftPeerId].srcObject = null;
-        if (peerAudios[leftPeerId].parentNode) { 
+        if (peerAudios[leftPeerId].parentNode) {
             peerAudios[leftPeerId].remove();
         }
         delete peerAudios[leftPeerId];
@@ -498,24 +591,43 @@ export function resetMediaUIAndState() {
 
     if(startShareBtn) { startShareBtn.title = ""; }
     if(remoteVideosContainer) remoteVideosContainer.innerHTML = '';
+    if(localScreenSharePreviewVideo) localScreenSharePreviewVideo.srcObject = null;
+    if(localScreenSharePreviewContainer) localScreenSharePreviewContainer.classList.add('hidden');
 
-    if(localVideoContainer) localVideoContainer.classList.add('hidden');
-    if(localVideo) localVideo.srcObject = null;
+    removeLocalVideoFromGrid();
     if(remoteVideoChatContainer) remoteVideoChatContainer.innerHTML = '';
     peerVideoElements = {};
+    if (toggleLocalVideoPreviewCheckbox) toggleLocalVideoPreviewCheckbox.checked = true;
+
 
     if(audioChatStatus) audioChatStatus.classList.add('hidden');
     Object.values(peerAudios).forEach(audioEl => {
         if (audioEl) { audioEl.pause(); audioEl.srcObject = null; if(audioEl.parentNode) audioEl.remove(); }
     });
     peerAudios = {};
-    
+
     enableMediaButtons();
 }
 
 export function updatePeerNicknameInUI(peerId, newNickname) {
     if (peerVideoElements[peerId] && peerVideoElements[peerId].nicknameP) {
         peerVideoElements[peerId].nicknameP.textContent = newNickname;
+    }
+    // Update local preview nickname if it's showing and matches the peerId being updated
+    if (localVideoPreviewElement && peerId === localGeneratedPeerIdDep) {
+        const nicknameP = localVideoPreviewElement.querySelector('p');
+        if (nicknameP) {
+            let currentLocalNickname = "You";
+             try { // Gracefully get nickname
+                const nicknames = getPeerNicknamesDep();
+                if (nicknames && nicknames[localGeneratedPeerIdDep]) {
+                    currentLocalNickname = nicknames[localGeneratedPeerIdDep];
+                } else if (typeof getLocalNicknameDep === 'function' && getLocalNicknameDep()) {
+                     currentLocalNickname = getLocalNicknameDep();
+                }
+            } catch(e) { /* ignore */ }
+            nicknameP.textContent = (newNickname || currentLocalNickname) + " (Preview)";
+        }
     }
     const screenShareContainer = document.getElementById(`container-screenshare-${peerId}`);
     if (screenShareContainer) {

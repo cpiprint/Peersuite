@@ -6,25 +6,25 @@
 <title>PeerSuite</title>
 <style>
 :root {
-  --primary: #0078d7; 
+  --primary: #0078d7;
   --primary-dark: #005a9e;
-  --secondary: #ef5350; 
+  --secondary: #ef5350;
   --bg-primary: #f5f5f5;
-  --bg-secondary: #ececec; 
+  --bg-secondary: #ececec;
   --bg-card: #ffffff;
-  --text-primary: #333333; 
+  --text-primary: #333333;
   --text-secondary: #666666;
   --border-color: #d8d8d8;
   --accent-color: var(--primary);
   --accent-hover: var(--primary-dark);
-  --self-message: #e1f1fd; 
-  --other-message: #f0f0f0; 
+  --self-message: #e1f1fd;
+  --other-message: #f0f0f0;
   --pm-self: #e7f2fa;
-  --pm-other: #f8f3e9; 
-  --pm-border: var(--secondary); 
+  --pm-other: #f8f3e9;
+  --pm-border: var(--secondary);
   --system-message: #f0f0f0;
   --system-text: #555555;
-  --danger-color: #e53935; 
+  --danger-color: #e53935;
   --danger-hover: #c62828;
   --info-bg: #e8f2fc;
   --info-border: var(--primary);
@@ -49,10 +49,10 @@
 }
 
 [data-theme="dark"] {
-  --bg-primary: #222222; 
-  --bg-secondary: #2d2d2d; 
+  --bg-primary: #222222;
+  --bg-secondary: #2d2d2d;
   --bg-card: #333333;
-  --text-primary: #e8e8e8; 
+  --text-primary: #e8e8e8;
   --text-secondary: #b0b0b0;
   --border-color: #444444;
   --self-message: #2a4766;
@@ -86,13 +86,13 @@
 }
 html, body { height: 100%; width: 100%; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.5;
   display: flex;
   flex-direction: column;
-  overflow: hidden; 
+  overflow: hidden;
 }
 
 /* Common Layout Patterns */
@@ -121,19 +121,19 @@ body {
 }
 
 .btn {
-  padding: 0.5rem 1rem; 
+  padding: 0.5rem 1rem;
   border: none;
   cursor: pointer;
   background-color: var(--accent-color);
   color: white;
-  font-weight: 500; 
+  font-weight: 500;
   font-size: 0.9rem;
   border-radius: var(--radius-sm);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
   transition: all var(--transition-fast);
 }
-.btn:hover { 
-  background-color: var(--accent-hover); 
+.btn:hover {
+  background-color: var(--accent-hover);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.16), 0 2px 4px rgba(0, 0, 0, 0.32);
   transform: translateY(-1px);
 }
@@ -215,19 +215,19 @@ body {
   position: relative; display: flex; align-items: center; border-radius: var(--radius-sm);
   border: 1px solid transparent;
 }
-.sidebar-button:hover { 
-  color: var(--accent-color); 
-  background-color: var(--user-hover); 
+.sidebar-button:hover {
+  color: var(--accent-color);
+  background-color: var(--user-hover);
   border-color: var(--border-color);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
-.sidebar-button.active { 
-  color: white; 
+.sidebar-button.active {
+  color: white;
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
   border-color: var(--primary);
   box-shadow: 0 2px 4px rgba(0, 120, 215, 0.3);
 }
-.sidebar-button.active:hover { 
+.sidebar-button.active:hover {
   background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
 }
 .sidebar-button .icon { margin-right: var(--space-md); }
@@ -248,19 +248,24 @@ body {
 }
 
 /* Form Elements */
-input[type="text"], input[type="password"], input[type="color"], input[type="range"], 
-input[type="file"], textarea {
+input[type="text"], input[type="password"], input[type="color"], input[type="range"],
+input[type="file"], textarea, input[type="checkbox"] {
   padding: var(--space-sm) var(--space-md); margin-bottom: var(--space-md);
   font-size: 0.95rem; background-color: var(--bg-secondary); color: var(--text-primary);
   border: 1px solid var(--border-color); border-radius: var(--radius-sm);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
   transition: all var(--transition-fast);
 }
+input[type="checkbox"] {
+    padding: 0; margin: 0 var(--space-xs) 0 0; vertical-align: middle;
+}
+label { vertical-align: middle; }
+
 input[type="text"], input[type="password"] { height: 34px; width: 100%; }
 textarea { width: 100%; min-height: 60px; resize: vertical; }
 input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
   outline: none; border-color: var(--accent-color);
-  box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15), inset 0 1px 3px rgba(0, 0, 0, 0.06); 
+  box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15), inset 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 input::placeholder, textarea::placeholder { color: var(--text-secondary); opacity: 0.8; }
 
@@ -271,7 +276,7 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 
 /* Chat */
 #chatSection .chat-section-content {
-  display: grid; grid-template-columns: minmax(0, 3fr) minmax(200px, 1fr); 
+  display: grid; grid-template-columns: minmax(0, 3fr) minmax(200px, 1fr);
   gap: var(--space-md); flex: 1; min-height: 0; height: 100%;
 }
 .chat-main { overflow: hidden; flex-grow: 1; height: 100%; }
@@ -315,38 +320,37 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   flex-direction: column;
   gap: var(--space-xs);
 }
-.chat-file-preview-link { /* Style for the link wrapping the preview */
-  display: inline-block; /* Important for max-width/height on image to work well */
-  line-height: 0; /* Removes extra space below image if it's an inline-block */
+.chat-file-preview-link {
+  display: inline-block;
+  line-height: 0;
   cursor: pointer;
-  border-radius: var(--radius-sm); /* Apply border radius to link for better click area */
-  overflow: hidden; /* Ensures image border radius is clipped by link's */
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 .chat-file-preview-link:hover img {
   opacity: 0.85;
   box-shadow: 0 0 8px var(--accent-color);
 }
 .chat-file-preview {
-  max-width: var(--MAX_PREVIEW_DIM); 
+  max-width: var(--MAX_PREVIEW_DIM);
   max-height: var(--MAX_PREVIEW_DIM);
-  /* Actual width/height set by JS or auto for aspect ratio */
-  width: auto;  
-  height: auto; 
-  object-fit: cover; 
+  width: auto;
+  height: auto;
+  object-fit: cover;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm); 
-  display: block; /* Make image a block inside the link */
+  border-radius: var(--radius-sm);
+  display: block;
   transition: opacity 0.2s ease, box-shadow 0.2s ease;
 }
 .message.self .file-info-container {
-  align-items: flex-end; /* Align preview to the right for self messages */
+  align-items: flex-end;
 }
 .message.other .file-info-container {
-  align-items: flex-start; /* Align preview to the left for other messages */
+  align-items: flex-start;
 }
 .file-text-info {
-  display: inline-block; 
-  font-size: 0.9em; 
+  display: inline-block;
+  font-size: 0.9em;
   color: var(--text-secondary);
 }
 .file-text-info strong {
@@ -363,14 +367,14 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   transition: all var(--transition-fast);
 }
 .channel-list-item:last-child { border-bottom: none; }
-.channel-list-item:hover { 
-  background-color: var(--user-hover); 
+.channel-list-item:hover {
+  background-color: var(--user-hover);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
-.channel-list-item.active { 
-  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%); 
-  color: white; 
-  font-weight: 600; 
+.channel-list-item.active {
+  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%);
+  color: white;
+  font-weight: 600;
   box-shadow: 0 2px 4px rgba(0, 120, 215, 0.3);
 }
 .add-channel-controls { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: auto; }
@@ -380,67 +384,148 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   list-style-type: none; max-height: 300px; overflow-y: auto;
   scrollbar-width: thin; scrollbar-color: var(--text-secondary) transparent;
 }
-#userList li { 
-  padding: var(--space-sm) var(--space-md); 
-  border-bottom: 1px solid var(--border-color); 
-  font-size: 0.9em; 
+#userList li {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.9em;
   transition: background-color var(--transition-fast);
 }
 #userList li:last-child { border-bottom: none; }
 #userList li.peer-name { cursor: pointer; display: flex; align-items: center; }
-#userList li.peer-name:hover { 
-  background-color: var(--user-hover); 
+#userList li.peer-name:hover {
+  background-color: var(--user-hover);
   border-radius: var(--radius-sm);
 }
 #userList li.peer-name::before { content: "💬"; margin-right: var(--space-sm); font-size: 0.9em; }
 
-/* Video */
-#localVideo, .remoteVideo { width: 100%; background-color: #111; aspect-ratio: 16/9; border-radius: var(--radius-sm); }
-.remote-videos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-md); flex-grow: 1; }
-.remote-video-wrapper { padding: var(--space-md); }
+/* Video & Screen Share Specific Styles */
+#localScreenSharePreviewContainer {
+    padding: var(--space-md);
+    max-width: 320px;
+    margin-top: var(--space-md);
+    flex-shrink: 0;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+#localScreenSharePreviewContainer h4 {
+    margin-bottom: var(--space-sm);
+    font-size: 0.9em;
+    color: var(--text-primary);
+    text-align: center;
+}
+#localScreenSharePreviewVideo {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background-color: #111;
+    border-radius: var(--radius-sm);
+}
+
+/* Grid for remote screen shares */
+#remoteVideosContainer {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-md);
+    flex-grow: 1; /* Allow it to grow */
+    min-height: 0; /* Important for flex/grid children */
+}
+
+/* Grid for video chat (both local preview and remote streams) */
+#remoteVideoChatContainer {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); /* Smaller min for more videos */
+    gap: var(--space-md);
+    width: 100%;
+    flex-grow: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+/* Common wrapper for any video item in a grid (screen share remote, or video chat items) */
+.remoteVideoContainer, /* For screen share items */
+.remote-video-wrapper { /* For video chat items */
+    background-color: var(--bg-card);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.remoteVideoContainer { /* Specific padding if needed for screen share items */
+    padding: var(--space-sm);
+}
+
+
+.remoteVideoContainer p, /* Nickname/Info for screen share */
+.remote-video-wrapper p { /* Nickname/Info for video chat */
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.85em;
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.remoteVideoContainer video, /* Video element in screen share item */
+.remote-video-wrapper video { /* Video element in video chat item */
+    width: 100%;
+    object-fit: contain;
+    display: block;
+    flex-grow: 1;
+    background-color: #000; /* Black background for letterboxing */
+}
+.remoteVideoContainer .maximize-btn { /* Maximize button for screen share */
+    margin-top: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.8em;
+}
+
 
 /* --- Whiteboard Specific Styles --- */
-#whiteboardSection { 
+#whiteboardSection {
     display: flex;
     flex-direction: column;
 }
-#whiteboardSection .button-group { 
-    flex-shrink: 0; 
-    margin-bottom: var(--space-sm); 
+#whiteboardSection .button-group {
+    flex-shrink: 0;
+    margin-bottom: var(--space-sm);
 }
-#whiteboardSection .button-group label { 
+#whiteboardSection .button-group label {
     margin-right: var(--space-xs);
     vertical-align: middle;
 }
 #whiteboardSection .button-group input[type="color"] {
-    padding: 0; 
-    width: 38px;  
-    height: 38px; 
-    border: 1px solid var(--border-color); 
-    border-radius: var(--radius-sm); 
+    padding: 0;
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    margin-bottom: 0; 
-    vertical-align: middle; 
-    -webkit-appearance: none; 
-    -moz-appearance: none; 
-    appearance: none; 
-    background-color: transparent; 
+    margin-bottom: 0;
+    vertical-align: middle;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: transparent;
 }
 #whiteboardSection .button-group input[type="color"]::-webkit-color-swatch-wrapper {
-    padding: 2px; 
+    padding: 2px;
 }
 #whiteboardSection .button-group input[type="color"]::-webkit-color-swatch {
     border: none;
-    width: 100%; 
-    height: 100%; 
-    border-radius: calc(var(--radius-sm) - 2px); 
+    width: 100%;
+    height: 100%;
+    border-radius: calc(var(--radius-sm) - 2px);
 }
 #whiteboardSection .button-group input[type="color"]::-moz-color-swatch {
     border: none;
-    width: calc(100% - 4px); 
+    width: calc(100% - 4px);
     height: calc(100% - 4px);
     border-radius: calc(var(--radius-sm) - 2px);
-    margin: 2px; 
+    margin: 2px;
 }
 #whiteboardSection .button-group input[type="range"] {
     vertical-align: middle;
@@ -448,54 +533,54 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 }
 #whiteboardSection .button-group #wbLineWidthValue {
     vertical-align: middle;
-    min-width: 30px; 
-    text-align: right; 
+    min-width: 30px;
+    text-align: right;
     margin-left: var(--space-xs);
 }
-#wbTextInputArea { 
-    display: flex; 
+#wbTextInputArea {
+    display: flex;
     gap: var(--space-sm);
     padding: var(--space-sm);
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    margin-bottom: var(--space-sm); 
-    align-items: center; 
-    flex-shrink: 0; 
+    margin-bottom: var(--space-sm);
+    align-items: center;
+    flex-shrink: 0;
 }
 #wbTextInputArea input[type="text"] {
-    flex-grow: 1; 
-    margin-bottom: 0; 
-    height: 34px; 
+    flex-grow: 1;
+    margin-bottom: 0;
+    height: 34px;
 }
 #wbTextInputArea button {
-    padding: 0.4rem 0.8rem; 
+    padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
 }
-.whiteboard-canvas-container { 
-  flex-grow: 1; 
-  min-height: 0; 
-  display: flex; 
-  align-items: center; 
+.whiteboard-canvas-container {
+  flex-grow: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  padding: var(--space-sm); 
-  background-color: var(--bg-card); 
-  border: 1px solid var(--border-color); 
+  padding: var(--space-sm);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  position: relative; 
-  overflow: hidden; 
+  position: relative;
+  overflow: hidden;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
 }
-#whiteboardCanvas { 
-  background-color: #FFFFFF; 
+#whiteboardCanvas {
+  background-color: #FFFFFF;
   border-radius: var(--radius-sm);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
-.wb-tool-palette { 
-  display: flex; 
-  gap: var(--space-xs); 
-  padding: var(--space-xs); 
-  margin-right: var(--space-sm); 
+.wb-tool-palette {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  margin-right: var(--space-sm);
   border-radius: var(--radius-sm);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
@@ -504,14 +589,14 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   padding: var(--space-sm); font-size: 1.1rem; border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
 }
-.wb-tool-btn:hover { 
-  background-color: var(--user-hover); 
+.wb-tool-btn:hover {
+  background-color: var(--user-hover);
   border-color: var(--border-color);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
-.wb-tool-btn.active { 
-  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%); 
-  color: white; 
+.wb-tool-btn.active {
+  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%);
+  color: white;
   border-color: var(--accent-color);
   box-shadow: 0 2px 4px rgba(0, 120, 215, 0.3);
 }
@@ -520,11 +605,11 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 
 /* Kanban */
 .kanban-board {
-  display: flex; flex-direction: row; gap: var(--space-md); overflow-x: auto; 
+  display: flex; flex-direction: row; gap: var(--space-md); overflow-x: auto;
   padding: var(--space-md); flex-grow: 1; min-height: 0;
 }
 .kanban-column {
-  background-color: var(--bg-secondary); padding: var(--space-md); width: 280px; 
+  background-color: var(--bg-secondary); padding: var(--space-md); width: 280px;
   flex-shrink: 0; display: flex; flex-direction: column; border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -548,13 +633,13 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 .kanban-card.dragging { opacity: 0.5; border: 1px dashed var(--accent-color); }
 
 /* Documents */
-.document-management-bar { 
-  display: flex; 
-  align-items: center; 
-  gap: var(--space-md); 
-  padding: var(--space-sm); 
-  flex-wrap: wrap; 
-  flex-shrink: 0; 
+.document-management-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm);
+  flex-wrap: wrap;
+  flex-shrink: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 #documentList { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
@@ -563,25 +648,25 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   border-radius: var(--radius-sm); transition: all var(--transition-fast);
   border: 1px solid transparent;
 }
-.document-list-item:hover { 
-  background-color: var(--user-hover); 
+.document-list-item:hover {
+  background-color: var(--user-hover);
   border-color: var(--border-color);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
-.document-list-item.active { 
-  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%); 
-  color: white; 
-  font-weight: 600; 
+.document-list-item.active {
+  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%);
+  color: white;
+  font-weight: 600;
   border-color: var(--accent-color);
   box-shadow: 0 2px 4px rgba(0, 120, 215, 0.3);
 }
 #collaborativeEditor {
-  flex-grow: 1; padding: var(--space-lg); overflow-y: auto; min-height: 150px; 
+  flex-grow: 1; padding: var(--space-lg); overflow-y: auto; min-height: 150px;
   line-height: 1.7; outline: none; border-radius: var(--radius-sm);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
   transition: border-color var(--transition-fast);
 }
-#collaborativeEditor:focus { 
+#collaborativeEditor:focus {
   border-color: var(--accent-color);
   box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15), inset 0 1px 3px rgba(0, 0, 0, 0.06);
 }
@@ -631,6 +716,12 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   .notification-dot { top: var(--space-xs); right: var(--space-xs); transform: none; }
   .kanban-board { flex-direction: column; align-items: stretch; }
   .kanban-column { width: auto; margin-bottom: var(--space-md); }
+  #remoteVideoChatContainer { /* Video chat grid on mobile */
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); /* Even smaller min for very small screens */
+  }
+  #remoteVideosContainer { /* Screen share grid on mobile */
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
 }
 </style>
 </head>
@@ -655,13 +746,13 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
     <div id="setupSection" class="setup-controls-container card">
         <label for="nicknameInput">Username:</label>
         <input type="text" id="nicknameInput" placeholder="Enter your username">
-        
+
         <div class="button-group">
             <button id="createPartyBtn" class="btn">Create Workspace</button>
             <button id="joinWorkspaceBtn" class="btn">Join Workspace</button>
             <button id="importWorkspaceBtn" class="btn">Import Workspace</button>
         </div>
-        
+
         <div id="createWorkspaceFields" class="hidden">
             <label for="roomPasswordInput">Workspace Password:</label>
             <input type="password" id="roomPasswordInput" placeholder="Enter workspace password">
@@ -670,7 +761,7 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                 <button id="cancelCreateBtn" class="btn">Cancel</button>
             </div>
         </div>
-        
+
         <div id="joinWorkspaceFields" class="hidden">
             <label for="roomIdInput">Workspace Code:</label>
             <input type="text" id="roomIdInput" placeholder="Enter Room Code">
@@ -681,7 +772,7 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                 <button id="cancelJoinBtn" class="btn">Cancel</button>
             </div>
         </div>
-        
+
         <input type="file" id="importFilePicker" class="hidden" accept=".peersuite_encrypted">
     </div>
     <div id="status">Enter username and choose an action: Create, Join, or Import a workspace.</div>
@@ -702,7 +793,7 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
             </button>
             <button class="sidebar-button" data-section="screenShareSection">
                 <span class="icon">📺</span><span>Screen Share</span>
-                <span class="notification-dot hidden" data-notification-for="screenShareSection"></span> 
+                <span class="notification-dot hidden" data-notification-for="screenShareSection"></span>
             </button>
             <button class="sidebar-button" data-section="whiteboardSection">
                 <span class="icon">🎨</span><span>Whiteboard</span>
@@ -722,7 +813,7 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
         </nav>
 
         <main class="main-app-content">
-            <div class="header-context-area"> 
+            <div class="header-context-area">
                 <div id="headerRoomInfoDisplay">
                     <p><strong>Workspace:</strong> <span id="currentRoomCodeSpan"></span><button id="copyRoomCodeBtn" class="copy-room-code-btn" title="Copy Room Code">📋</button></p>
                     <p class="room-info-separator">|</p>
@@ -753,7 +844,7 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                                 <button id="addChannelBtn" class="btn">Create Channel</button>
                             </div>
                         </div>
-                        <div class="user-list-sidebar"> 
+                        <div class="user-list-sidebar">
                              <h3>Users Online</h3>
                              <ul id="userList" class="card"></ul>
                         </div>
@@ -766,13 +857,14 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                 <div class="button-group">
                     <button id="startVideoCallBtn" class="btn">Start Video Call</button>
                     <button id="stopVideoCallBtn" class="btn" disabled>Stop Video Call</button>
-                </div>
-                <div id="videoChatContainer" class="flex flex-col gap-md">
-                    <div id="localVideoContainer" class="card hidden" style="padding: var(--space-md); max-width: 320px;">
-                        <h3>My Video</h3>
-                        <video id="localVideo" autoplay muted playsinline></video>
+                    <div style="margin-left: auto; display: flex; align-items: center;">
+                        <input type="checkbox" id="toggleLocalVideoPreviewCheckbox" checked style="margin-bottom: 0;">
+                        <label for="toggleLocalVideoPreviewCheckbox" style="margin-left: var(--space-xs); margin-bottom: 0;">Show my preview in grid</label>
                     </div>
-                    <div id="remoteVideoChatContainer" class="remote-videos-grid"></div>
+                </div>
+                <!-- The remoteVideoChatContainer is where all video chat tiles (local preview + remotes) will go -->
+                <div id="remoteVideoChatContainer" class="remote-videos-grid">
+                    <!-- Dynamically populated by media.js -->
                 </div>
             </div>
 
@@ -793,12 +885,20 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                     <button id="startShareBtn" class="btn">Start Sharing Screen</button>
                     <button id="stopShareBtn" class="btn" disabled>Stop Sharing Screen</button>
                 </div>
-                <div id="remoteVideosContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-md);"></div>
+                <!-- Local preview for screen sharing - this is SEPARATE from the video chat grid -->
+                <div id="localScreenSharePreviewContainer" class="hidden">
+                    <h4>My Screen Preview</h4>
+                    <video id="localScreenSharePreviewVideo" autoplay muted playsinline></video>
+                </div>
+                <!-- Container for remote screen shares -->
+                <div id="remoteVideosContainer" style="flex-grow: 1; min-height: 0; margin-top: var(--space-md);">
+                    <!-- Dynamically populated by media.js -->
+                </div>
             </div>
 
             <div id="whiteboardSection" class="content-section hidden section-pane">
                 <h2>Collaborative Whiteboard</h2>
-                <div class="button-group"> <!-- Main tools toolbar -->
+                <div class="button-group">
                     <div class="wb-tool-palette card">
                         <button class="wb-tool-btn" data-tool="pen" title="Pen">✏️</button>
                         <button class="wb-tool-btn" data-tool="line" title="Line">📏</button>
@@ -814,7 +914,7 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                     <button id="wbExportPngBtn" class="btn">Export PNG</button>
                 </div>
 
-                <div id="wbTextInputArea" class="hidden"> <!-- Text input specific toolbar -->
+                <div id="wbTextInputArea" class="hidden">
                     <input type="text" id="wbActualTextInput" placeholder="Enter text...">
                     <button id="wbSubmitTextBtn" class="btn">Add Text</button>
                 </div>
@@ -857,6 +957,6 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
         </main>
     </div>
 </div>
-<script type="module" src="main.js"></script> 
+<script type="module" src="main.js"></script>
 </body>
 </html>
