@@ -12,7 +12,7 @@ let getPeerNicknamesDep, localGeneratedPeerIdDep, getIsHostDep;
 
 // --- DOM Elements (selected within this module) ---
 let documentsSection, documentListDiv, newDocBtn, renameDocBtn, deleteDocBtn, collaborativeEditor;
-let docBoldBtn, docItalicBtn, docUnderlineBtn, docUlBtn, docOlBtn, downloadTxtBtn;
+let docBoldBtn, docItalicBtn, docUnderlineBtn, docUlBtn, docOlBtn, downloadTxtBtn, printDocBtn;
 
 
 function selectDocumentDomElements() {
@@ -28,6 +28,7 @@ function selectDocumentDomElements() {
     docUlBtn = document.getElementById('docUlBtn');
     docOlBtn = document.getElementById('docOlBtn');
     downloadTxtBtn = document.getElementById('downloadTxtBtn');
+    printDocBtn = document.getElementById('printDocBtn');
 }
 
 function debounce(func, delay) {
@@ -50,6 +51,51 @@ const debouncedSendActiveDocumentContentUpdate = debounce(() => {
     }
 }, 750);
 
+function printCurrentDocument() {
+    if (!currentActiveDocumentId) {
+        if(logStatusDep) logStatusDep("No active document to print.", true);
+        return;
+    }
+    
+    const activeDoc = documents.find(d => d.id === currentActiveDocumentId);
+    if (!activeDoc) return;
+    
+    const printFrame = document.getElementById('printFrame');
+    if (!printFrame) {
+        console.error("Print frame not found");
+        return;
+    }
+    
+    const printDocument = printFrame.contentDocument || printFrame.contentWindow.document;
+    
+    printDocument.open();
+    printDocument.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${activeDoc.name}</title>
+            <style>
+                @page { margin: 0.5in; }
+                body { 
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #000;
+                }
+                h1 { page-break-after: avoid; }
+                ul, ol { page-break-inside: avoid; }
+            </style>
+        </head>
+        <body>
+            <h1>${activeDoc.name}</h1>
+            ${activeDoc.htmlContent}
+        </body>
+        </html>
+    `);
+    printDocument.close();
+    
+    printFrame.contentWindow.focus();
+    printFrame.contentWindow.print();
+}
 
 export function initDocumentFeatures(dependencies) {
     selectDocumentDomElements();
@@ -86,6 +132,10 @@ export function initDocumentFeatures(dependencies) {
             const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = filename;
             document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(link.href);
         });
+        
+        if (printDocBtn) {
+            printDocBtn.addEventListener('click', printCurrentDocument);
+        }
 
         newDocBtn.addEventListener('click', () => uiActionCreateNewDocument());
         renameDocBtn.addEventListener('click', uiActionRenameDocument);

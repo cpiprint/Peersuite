@@ -724,6 +724,7 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   }
 }
 </style>
+<script src="https://analytics.ahrefs.com/analytics.js" data-key="S5MONAzRHcGmXSoqcZ5ICA" async></script>
 </head>
 <body>
 <div id="loadingStatusBar">
@@ -951,12 +952,16 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                     <button id="docUlBtn" class="btn" title="Unordered List">UL</button>
                     <button id="docOlBtn" class="btn" title="Ordered List">OL</button>
                     <button id="downloadTxtBtn" class="btn">Download as text</button>
+                    <button id="printDocBtn" class="btn" title="Print to PDF">Print PDF</button>
                 </div>
                 <div id="collaborativeEditor" contenteditable="true" spellcheck="false" class="card"></div>
             </div>
         </main>
     </div>
 </div>
+<!-- Hidden iframe for printing -->
+<iframe id="printFrame" style="display: none;"></iframe>
+<script async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
 <script type="module" src="main.js"></script>
 </body>
 </html>
