@@ -1,4 +1,3 @@
-// --- START OF FILE main.js ---
 
 import { joinRoom, selfId as localGeneratedPeerId } from './trystero-torrent.min.js';
 import { 
@@ -11,7 +10,7 @@ import {
 } from './share.js';
 import { initMediaFeatures, handleMediaPeerStream, stopAllLocalMedia, setupMediaForNewPeer, cleanupMediaForPeer } from './media.js';
 
-const APP_ID = 'PeerSuite-0.1.0-may25';
+const APP_ID = 'PeerSuite-0.1.1-may31';
 
 const wordList = [
     "able", "acid", "army", "away", "baby", "back", "ball", "band", "bank", "base",
@@ -50,8 +49,8 @@ const currentRoomCodeSpan = document.getElementById('currentRoomCodeSpan');
 const copyRoomCodeBtn = document.getElementById('copyRoomCodeBtn');
 const currentNicknameSpan = document.getElementById('currentNicknameSpan');
 const themeToggle = document.getElementById('themeToggle');
-const sidebarButtons = document.querySelectorAll('.sidebar-button');
-const contentSections = document.querySelectorAll('.content-section');
+const sidebarButtons = document.querySelectorAll('.sidebar-button'); // This will now include settingsSidebarBtn
+const contentSections = document.querySelectorAll('.content-section'); // This will now include settingsSection
 const userCountSpan = document.getElementById('userCountSpan'); 
 const userListUl = document.getElementById('userList'); 
 
@@ -59,14 +58,33 @@ const userListUl = document.getElementById('userList');
 const loadingStatusBar = document.getElementById('loadingStatusBar');
 const loadingStatusText = document.getElementById('loadingStatusText');
 
+// Settings Section Elements 
+const settingsSidebarBtn = document.getElementById('settingsSidebarBtn');
+const settingsSection = document.getElementById('settingsSection');
+const settingsNicknameInput = document.getElementById('settingsNicknameInput');
+const settingsVideoFlipCheckbox = document.getElementById('settingsVideoFlipCheckbox');
+const settingsPttEnabledCheckbox = document.getElementById('settingsPttEnabledCheckbox');
+const pttHotkeySettingsContainer = document.getElementById('pttHotkeySettingsContainer');
+const settingsPttKeyBtn = document.getElementById('settingsPttKeyBtn');
+const pttKeyInstructions = document.getElementById('pttKeyInstructions');
+const settingsSaveBtn = document.getElementById('settingsSaveBtn');
+let isCapturingPttKey = false;
+
 // Global State for main.js
 let roomApi;
 let localNickname = '';
 let currentRoomId = '';
 let currentActiveSection = 'chatSection'; 
-let peerNicknames = {}; // { peerId: nickname }
+let peerNicknames = {};
 let isHost = false;
 let importedWorkspaceState = null;
+
+let peerSuiteSettings = {
+    videoFlip: false,
+    pttEnabled: false,
+    pttKey: 'Space', 
+    pttKeyDisplay: 'Space' 
+};
 
 // Trystero action send/receive function pairs
 let sendChatMessage, onChatMessage, sendNickname, onNickname, sendPrivateMessage, onPrivateMessage;
@@ -86,7 +104,121 @@ const CRYPTO_ALGO = 'AES-GCM';
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
-// Loading Status Bar Functions
+function loadSettings() {
+    const savedSettings = localStorage.getItem('peerSuiteAppSettings');
+    if (savedSettings) {
+        try {
+            const parsedSettings = JSON.parse(savedSettings);
+            // Ensure all expected keys exist before overriding defaults
+            peerSuiteSettings = { 
+                videoFlip: typeof parsedSettings.videoFlip === 'boolean' ? parsedSettings.videoFlip : false,
+                pttEnabled: typeof parsedSettings.pttEnabled === 'boolean' ? parsedSettings.pttEnabled : false,
+                pttKey: typeof parsedSettings.pttKey === 'string' ? parsedSettings.pttKey : 'Space',
+                pttKeyDisplay: typeof parsedSettings.pttKeyDisplay === 'string' ? parsedSettings.pttKeyDisplay : 'Space'
+            };
+        } catch (e) {
+            console.error("Error parsing saved settings, using defaults.", e);
+            // Fallback to defaults if parsing fails
+            peerSuiteSettings = { videoFlip: false, pttEnabled: false, pttKey: 'Space', pttKeyDisplay: 'Space' };
+        }
+    }
+
+    populateSettingsSection(); 
+
+    if (window.mediaModuleRef && window.mediaModuleRef.setLocalVideoFlip) {
+        window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip);
+    }
+    if (window.mediaModuleRef && window.mediaModuleRef.updatePttSettings) {
+        window.mediaModuleRef.updatePttSettings(peerSuiteSettings.pttEnabled, peerSuiteSettings.pttKey, peerSuiteSettings.pttKeyDisplay);
+    }
+}
+
+function saveSettings() {
+    localStorage.setItem('peerSuiteAppSettings', JSON.stringify(peerSuiteSettings));
+}
+
+
+function populateSettingsSection() {
+    if (!settingsNicknameInput || !settingsVideoFlipCheckbox || !settingsPttEnabledCheckbox || !settingsPttKeyBtn || !pttHotkeySettingsContainer) return;
+    settingsNicknameInput.value = localNickname;
+    settingsVideoFlipCheckbox.checked = peerSuiteSettings.videoFlip;
+    settingsPttEnabledCheckbox.checked = peerSuiteSettings.pttEnabled;
+    settingsPttKeyBtn.textContent = peerSuiteSettings.pttKeyDisplay;
+    pttHotkeySettingsContainer.classList.toggle('hidden', !settingsPttEnabledCheckbox.checked);
+}
+
+
+function handlePttKeyCapture(event) {
+    if (!isCapturingPttKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.key === 'Escape') {
+       
+    } else {
+        peerSuiteSettings.pttKey = event.code;
+        if (event.code === 'Space') peerSuiteSettings.pttKeyDisplay = 'Space';
+        else if (event.key.length === 1) peerSuiteSettings.pttKeyDisplay = event.key.toUpperCase();
+        else peerSuiteSettings.pttKeyDisplay = event.key;
+        
+        if (settingsPttKeyBtn) settingsPttKeyBtn.textContent = peerSuiteSettings.pttKeyDisplay;
+    }
+    
+    isCapturingPttKey = false;
+    if (pttKeyInstructions) pttKeyInstructions.classList.add('hidden');
+    if (settingsPttKeyBtn) settingsPttKeyBtn.classList.remove('hidden');
+    document.removeEventListener('keydown', handlePttKeyCapture, true);
+}
+
+
+if (settingsPttEnabledCheckbox) {
+    settingsPttEnabledCheckbox.addEventListener('change', () => {
+        if (pttHotkeySettingsContainer) pttHotkeySettingsContainer.classList.toggle('hidden', !settingsPttEnabledCheckbox.checked);
+    });
+}
+
+if (settingsPttKeyBtn) {
+    settingsPttKeyBtn.addEventListener('click', () => {
+        if (isCapturingPttKey) return; 
+        isCapturingPttKey = true;
+        settingsPttKeyBtn.classList.add('hidden');
+        if(pttKeyInstructions) pttKeyInstructions.classList.remove('hidden');
+        document.addEventListener('keydown', handlePttKeyCapture, true);
+    });
+}
+
+if (settingsSaveBtn) {
+    settingsSaveBtn.addEventListener('click', async () => {
+        const newNickname = settingsNicknameInput.value.trim();
+        if (newNickname && newNickname !== localNickname) {
+            localNickname = newNickname;
+            localStorage.setItem('viewPartyNickname', localNickname);
+            if(currentNicknameSpan) currentNicknameSpan.textContent = localNickname;
+            updateUserList();
+            if (roomApi && sendNickname) {
+                await sendNickname({ nickname: localNickname, initialJoin: false, isHost: isHost });
+            }
+             if (window.mediaModuleRef && window.mediaModuleRef.updatePeerNicknameInUI) {
+                window.mediaModuleRef.updatePeerNicknameInUI(localGeneratedPeerId, localNickname);
+            }
+        }
+
+        peerSuiteSettings.videoFlip = settingsVideoFlipCheckbox.checked;
+        peerSuiteSettings.pttEnabled = settingsPttEnabledCheckbox.checked;
+
+        saveSettings();
+
+        if (window.mediaModuleRef && window.mediaModuleRef.setLocalVideoFlip) {
+            window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip);
+        }
+        if (window.mediaModuleRef && window.mediaModuleRef.updatePttSettings) {
+            window.mediaModuleRef.updatePttSettings(peerSuiteSettings.pttEnabled, peerSuiteSettings.pttKey, peerSuiteSettings.pttKeyDisplay);
+        }
+        logStatus("Settings saved.");
+
+    });
+}
+
 function showLoadingStatus(message) {
     if (loadingStatusBar && loadingStatusText) {
         loadingStatusText.textContent = message;
@@ -121,23 +253,30 @@ if (themeToggle) {
         }
     });
 }
-initTheme();
 
-// --- Sidebar Navigation ---
 sidebarButtons.forEach(button => {
-    if (button.id === 'exportWorkspaceBtnSidebar') return;
+
+    if (button.id === 'exportWorkspaceBtnSidebar') return; 
+
     button.addEventListener('click', () => {
         const targetSectionId = button.getAttribute('data-section');
         const targetSectionElement = document.getElementById(targetSectionId);
+
+
         if (currentActiveSection === targetSectionId && targetSectionElement && !targetSectionElement.classList.contains('hidden')) {
             return;
         }
-        sidebarButtons.forEach(btn => { if (btn.id !== 'exportWorkspaceBtnSidebar') btn.classList.remove('active'); });
+        
+        sidebarButtons.forEach(btn => { 
+            if (btn.id !== 'exportWorkspaceBtnSidebar') btn.classList.remove('active'); 
+        });
         button.classList.add('active');
         currentActiveSection = targetSectionId;
+
         contentSections.forEach(section => {
             section.classList.toggle('hidden', section.id !== targetSectionId);
         });
+        
         clearNotification(targetSectionId);
 
         const shareModule = window.shareModuleRef;
@@ -152,8 +291,21 @@ sidebarButtons.forEach(button => {
                  shareModule.renderDocumentsIfActive();
             }
         }
+        if (targetSectionId === 'videoChatSection' && window.mediaModuleRef && window.mediaModuleRef.setLocalVideoFlip) {
+            window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip, true); 
+        }
+        if (targetSectionId === 'settingsSection') {
+            populateSettingsSection(); 
+            if (isCapturingPttKey) {
+                isCapturingPttKey = false;
+                if (pttKeyInstructions) pttKeyInstructions.classList.add('hidden');
+                if (settingsPttKeyBtn) settingsPttKeyBtn.classList.remove('hidden');
+                document.removeEventListener('keydown', handlePttKeyCapture, true);
+            }
+        }
     });
 });
+
 
 function showNotification(sectionId) {
     const targetSectionElement = document.getElementById(sectionId);
@@ -169,7 +321,6 @@ function clearNotification(sectionId) {
     if (dot) dot.classList.add('hidden');
 }
 
-// --- Utility Functions ---
 function logStatus(message, isError = false) {
     console.log(message);
     if (statusDiv) {
@@ -288,8 +439,8 @@ if (importFilePicker) {
                 typeof importedWorkspaceState.documents === 'undefined' || 
                 typeof importedWorkspaceState.currentActiveDocumentId === 'undefined' ||
                 typeof importedWorkspaceState.channels === 'undefined' ||
-                typeof importedWorkspaceState.chatHistory === 'undefined' // Ensure NO '||' at the end of this line
-            ) { // Ensure THIS closing parenthesis ')' is present
+                typeof importedWorkspaceState.chatHistory === 'undefined' 
+            ) { 
                 throw new Error("Invalid or incomplete workspace file structure (post-refactor).");
             }
             if (importedWorkspaceState.roomId && roomIdInput && !roomIdInput.value) { roomIdInput.value = importedWorkspaceState.roomId; }
@@ -313,6 +464,8 @@ async function joinRoomAndSetup() {
         logStatus("Please enter a nickname.", true);
         return;
     }
+    localStorage.setItem('viewPartyNickname', localNickname); 
+    populateSettingsSection();
 
     const roomPassword = roomPasswordInput.value;
     if (!roomPassword) {
@@ -395,38 +548,40 @@ async function joinRoomAndSetup() {
         [sendInitialChannels, onInitialChannels] = roomApi.makeAction('initChans'); 
 
         const shareModuleDeps = {
-            // Chat, File, Channel related actions (managed by share.js)
             sendChatMessage, sendPrivateMessage, sendFileMeta, sendFileChunk,
             sendChatHistory, sendCreateChannel, sendInitialChannels,
-            // Actions for sub-modules (passed through share.js to them)
             sendDrawCommand, sendInitialWhiteboard, 
             sendKanbanUpdate, sendInitialKanban,
             sendInitialDocuments, sendCreateDocument, sendRenameDocument,
             sendDeleteDocument, sendDocumentContentUpdate,
-            // General dependencies
             logStatus, showNotification,
             localGeneratedPeerId,
             getPeerNicknames: () => peerNicknames,
             getIsHost: () => isHost,
             getLocalNickname: () => localNickname,
             findPeerIdByNicknameFnc: findPeerIdByNickname,
-            getImportedWorkspaceState: () => importedWorkspaceState, // For initial load in share.js
+            getImportedWorkspaceState: () => importedWorkspaceState, 
             clearImportedWorkspaceState: () => { importedWorkspaceState = null; },
             currentRoomId: currentRoomId,
         };
-        window.shareModuleRef = initShareFeatures(shareModuleDeps); // This now initializes sub-modules too
+        window.shareModuleRef = initShareFeatures(shareModuleDeps); 
         
         const mediaModuleDeps = {
             roomApi, logStatus, showNotification,
             localGeneratedPeerId,
             getPeerNicknames: () => peerNicknames,
+            getLocalNickname: () => localNickname, 
+            initialVideoFlip: peerSuiteSettings.videoFlip,
+            initialPttEnabled: peerSuiteSettings.pttEnabled,
+            initialPttKey: peerSuiteSettings.pttKey,
+            initialPttKeyDisplay: peerSuiteSettings.pttKeyDisplay
         };
         window.mediaModuleRef = initMediaFeatures(mediaModuleDeps);
+
         if (importedWorkspaceState && isHost) {
             showLoadingStatus("Applying imported workspace data...");
             logStatus("Imported workspace state is being applied by the share module for hosting.");
         } else if (isHost && window.shareModuleRef.ensureDefaultDocument) {
-      
             window.shareModuleRef.ensureDefaultDocument();
         }
 
@@ -475,7 +630,7 @@ async function joinRoomAndSetup() {
             if (window.mediaModuleRef && typeof setupMediaForNewPeer === 'function') setupMediaForNewPeer(joinedPeerId);
 
             if (isHost && window.shareModuleRef && window.shareModuleRef.sendFullStateToPeer) { 
-                 window.shareModuleRef.sendFullStateToPeer(joinedPeerId); // This now sends state from all sub-modules
+                 window.shareModuleRef.sendFullStateToPeer(joinedPeerId); 
             }
             hideLoadingStatus();
         });
@@ -529,6 +684,14 @@ async function joinRoomAndSetup() {
                 shareModule.renderDocumentsIfActive(true); 
             }
         }
+        
+        if (window.mediaModuleRef && window.mediaModuleRef.setLocalVideoFlip) {
+            window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip);
+        }
+        if (window.mediaModuleRef && window.mediaModuleRef.updatePttSettings) {
+            window.mediaModuleRef.updatePttSettings(peerSuiteSettings.pttEnabled, peerSuiteSettings.pttKey, peerSuiteSettings.pttKeyDisplay);
+        }
+
 
         hideLoadingStatus();
         logStatus(`Connected to workspace: ${currentRoomId}`);
@@ -550,7 +713,6 @@ async function leaveRoomAndCleanup() {
         catch (e) { console.warn("Error leaving room:", e); }
     }
     roomApi = null;
-    // Nullify all Trystero actions
     sendChatMessage = onChatMessage = sendNickname = onNickname = sendPrivateMessage = onPrivateMessage = null;
     sendFileMeta = onFileMeta = sendFileChunk = onFileChunk = null;
     sendDrawCommand = onDrawCommand = sendInitialWhiteboard = onInitialWhiteboard = null;
@@ -586,7 +748,7 @@ function resetToSetupState() {
  
     if (window.shareModuleRef && typeof resetShareModuleStates === 'function') {
         resetShareModuleStates(); 
-        if (window.shareModuleRef.hideEmojiPicker) window.shareModuleRef.hideEmojiPicker(); // Emoji picker is chat-specific
+        if (window.shareModuleRef.hideEmojiPicker) window.shareModuleRef.hideEmojiPicker(); 
     }
 
     if(userListUl) userListUl.innerHTML = '';
@@ -598,7 +760,11 @@ function resetToSetupState() {
         if (btn.id !== 'exportWorkspaceBtnSidebar') btn.classList.remove('active');
         clearNotification(btn.dataset.section);
     });
+    // Ensure settings section is hidden initially too
+    if (settingsSection) settingsSection.classList.add('hidden');
+
     contentSections.forEach(section => section.classList.add('hidden'));
+
 
     const defaultSectionButton = document.querySelector('.sidebar-button[data-section="chatSection"]');
     const defaultSection = document.getElementById('chatSection');
@@ -609,7 +775,7 @@ function resetToSetupState() {
     peerNicknames = {};
     isHost = false;
     currentRoomId = '';
-    importedWorkspaceState = null; // Ensure this is cleared
+    importedWorkspaceState = null; 
 }
 
 // --- Event Listeners for Main Controls ---
@@ -681,9 +847,9 @@ if (copyRoomCodeBtn) {
     });
 }
 
-const savedNickname = localStorage.getItem('viewPartyNickname');
-if (savedNickname && nicknameInput) nicknameInput.value = savedNickname;
+localNickname = localStorage.getItem('viewPartyNickname') || ''; 
 if (nicknameInput) {
+    nicknameInput.value = localNickname;
     nicknameInput.addEventListener('input', () => {
         localStorage.setItem('viewPartyNickname', nicknameInput.value.trim());
     });
@@ -698,4 +864,6 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 }
 
 // Initial state
-resetToSetupState(); 
+initTheme();
+loadSettings(); 
+resetToSetupState();

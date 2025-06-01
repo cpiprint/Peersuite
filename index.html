@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
 <title>PeerSuite</title>
 <style>
 :root {
@@ -140,6 +141,22 @@ body {
 .btn:disabled { background-color: var(--border-color); cursor: not-allowed; opacity: 0.7; transform: none; }
 .btn-danger { background-color: var(--danger-color); }
 .btn-danger:hover { background-color: var(--danger-hover); }
+.btn-outline {
+  background-color: transparent;
+  color: var(--accent-color);
+  border: 1px solid var(--accent-color);
+}
+.btn-outline:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+.btn-icon { /* For icon-only buttons */
+    padding: var(--space-sm);
+    font-size: 1.2rem; /* Adjust as needed */
+    line-height: 1;
+    min-width: auto;
+}
+
 
 /* Main Layout */
 .container { width: 100%; flex-grow: 1; height: 100vh; display: flex; flex-direction: column; }
@@ -156,10 +173,15 @@ body {
   padding: var(--space-sm) var(--space-md);
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  display: flex; flex-direction: column; gap: var(--space-xs);
+  display: flex; justify-content: space-between; align-items: center; 
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
-.app-header h1 { display: flex; justify-content: space-between; align-items: center; font-size: 1.4rem; }
+.app-header-title-group { 
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+.app-header h1 { font-size: 1.4rem; margin:0; }
 .header-context-area { display: flex; flex-direction: column; gap: var(--space-xs); font-size: 0.85em; }
 #headerRoomInfoDisplay { display: flex; gap: var(--space-sm); align-items: center; color: var(--text-secondary); flex-wrap: wrap; }
 #headerRoomInfoDisplay strong { color: var(--text-primary); margin-right: var(--space-xs); }
@@ -243,9 +265,17 @@ body {
   background-color: var(--bg-secondary); padding: var(--space-md);
   border: 1px solid var(--border-color); border-radius: var(--radius-md);
   display: flex; flex-direction: column; gap: var(--space-md);
-  flex-grow: 1; min-height: 0; overflow: hidden; height: 100%;
+  flex-grow: 1; min-height: 0; overflow: auto; /* Changed to auto for settings section potentially */
+  height: 100%;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
+#settingsSection.section-pane { /* Specific for settings if needed */
+    max-width: 600px; /* Limit width of settings for better readability */
+    margin: 0 auto; /* Center it if it's not full width of main content */
+    height: auto; /* Allow settings pane to determine its own height */
+    flex-grow: 0; /* Don't let it try to fill all vertical space if content is short */
+}
+
 
 /* Form Elements */
 input[type="text"], input[type="password"], input[type="color"], input[type="range"],
@@ -476,6 +506,7 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
     display: block;
     flex-grow: 1;
     background-color: #000; /* Black background for letterboxing */
+    transition: transform var(--transition-fast); /* For video flip */
 }
 .remoteVideoContainer .maximize-btn { /* Maximize button for screen share */
     margin-top: var(--space-xs);
@@ -698,6 +729,29 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 /* Animations */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
+/* REMOVED Modal Styles as it's now a content section */
+/* .modal { ... } */
+/* .modal-overlay { ... } */
+/* .modal-content { ... } */
+
+.settings-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xs);
+}
+.settings-option label { margin-bottom: 0; } 
+.settings-option input[type="checkbox"] { margin-bottom: 0; }
+#settingsPttKeyBtn { margin-bottom: 0; padding: var(--space-xs) var(--space-sm); }
+#pttKeyInstructions { font-size: 0.8em; color: var(--text-secondary); margin-left: var(--space-sm); }
+.settings-actions { /* Renamed from modal-actions */
+  display: flex;
+  justify-content: flex-start; /* Align to start for section */
+  gap: var(--space-md);
+  margin-top: var(--space-lg); /* More space at the bottom */
+}
+
+
 /* Responsive */
 @media (max-width: 900px) {
   :root { --sidebar-width: 170px; }
@@ -716,11 +770,15 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   .notification-dot { top: var(--space-xs); right: var(--space-xs); transform: none; }
   .kanban-board { flex-direction: column; align-items: stretch; }
   .kanban-column { width: auto; margin-bottom: var(--space-md); }
-  #remoteVideoChatContainer { /* Video chat grid on mobile */
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); /* Even smaller min for very small screens */
+  #remoteVideoChatContainer { 
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); 
   }
-  #remoteVideosContainer { /* Screen share grid on mobile */
+  #remoteVideosContainer { 
       grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+  #settingsSection.section-pane { /* Settings section on mobile */
+    max-width: 100%; 
+    margin: 0; 
   }
 }
 </style>
@@ -733,15 +791,15 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
 
 <div class="container">
     <div class="app-header">
-        <h1>
-           PeerSuite
+        <div class="app-header-title-group">
+            <h1>PeerSuite</h1>
             <label class="theme-switch">
                 <span class="light-icon">☀️</span>
                 <input type="checkbox" id="themeToggle" class="theme-switch-checkbox">
                 <span class="theme-switch-track"><span class="theme-switch-thumb"></span></span>
                 <span class="dark-icon">🌙</span>
             </label>
-        </h1>
+        </div>
     </div>
 
     <div id="setupSection" class="setup-controls-container card">
@@ -808,7 +866,11 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                 <span class="icon">📄</span><span>Documents</span>
                 <span class="notification-dot hidden" data-notification-for="documentsSection"></span>
             </button>
-            <button class="sidebar-button" id="exportWorkspaceBtnSidebar" style="margin-top: auto; color: var(--accent-color);">
+            
+            <button class="sidebar-button" id="settingsSidebarBtn" data-section="settingsSection" style="margin-top: auto;">
+                <span class="icon">⚙️</span><span>Settings</span>
+            </button>
+            <button class="sidebar-button" id="exportWorkspaceBtnSidebar" style="color: var(--accent-color);">
                 <span class="icon">💾</span><span>Export Workspace</span>
             </button>
         </nav>
@@ -863,9 +925,7 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                         <label for="toggleLocalVideoPreviewCheckbox" style="margin-left: var(--space-xs); margin-bottom: 0;">Show my preview in grid</label>
                     </div>
                 </div>
-                <!-- The remoteVideoChatContainer is where all video chat tiles (local preview + remotes) will go -->
                 <div id="remoteVideoChatContainer" class="remote-videos-grid">
-                    <!-- Dynamically populated by media.js -->
                 </div>
             </div>
 
@@ -875,8 +935,8 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                     <button id="startAudioCallBtn" class="btn">Start Audio Call</button>
                     <button id="stopAudioCallBtn" class="btn" disabled>Stop Audio Call</button>
                 </div>
-                <div id="audioChatStatus" class="hidden" style="padding: var(--space-xs) var(--space-sm); background-color: var(--info-bg); border-left: 2px solid var(--info-border); border-radius: var(--radius-sm);">
-                    Audio call active. You are transmitting audio.
+                <div id="audioChatStatus" class="hidden" style="padding: var(--space-xs) var(--space-sm); background-color: var(--info-bg); border-left: 2px solid var(--info-border); border-radius: var(--radius-sm); margin-top: var(--space-sm);">
+                    Audio call active.
                 </div>
             </div>
 
@@ -886,14 +946,11 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                     <button id="startShareBtn" class="btn">Start Sharing Screen</button>
                     <button id="stopShareBtn" class="btn" disabled>Stop Sharing Screen</button>
                 </div>
-                <!-- Local preview for screen sharing - this is SEPARATE from the video chat grid -->
                 <div id="localScreenSharePreviewContainer" class="hidden">
                     <h4>My Screen Preview</h4>
                     <video id="localScreenSharePreviewVideo" autoplay muted playsinline></video>
                 </div>
-                <!-- Container for remote screen shares -->
                 <div id="remoteVideosContainer" style="flex-grow: 1; min-height: 0; margin-top: var(--space-md);">
-                    <!-- Dynamically populated by media.js -->
                 </div>
             </div>
 
@@ -914,12 +971,10 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                     <button id="wbClearBtn" class="btn">Clear Board</button>
                     <button id="wbExportPngBtn" class="btn">Export PNG</button>
                 </div>
-
                 <div id="wbTextInputArea" class="hidden">
                     <input type="text" id="wbActualTextInput" placeholder="Enter text...">
                     <button id="wbSubmitTextBtn" class="btn">Add Text</button>
                 </div>
-
                 <div class="whiteboard-canvas-container">
                     <canvas id="whiteboardCanvas" width="640" height="360"></canvas>
                 </div>
@@ -956,10 +1011,46 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
                 </div>
                 <div id="collaborativeEditor" contenteditable="true" spellcheck="false" class="card"></div>
             </div>
+
+            <!-- NEW Settings Section -->
+            <div id="settingsSection" class="content-section hidden section-pane card">
+                <h2>Settings</h2>
+                
+                <label for="settingsNicknameInput">Username:</label>
+                <input type="text" id="settingsNicknameInput" style="margin-bottom: var(--space-md);">
+
+                <div class="settings-option">
+                    <input type="checkbox" id="settingsVideoFlipCheckbox">
+                    <label for="settingsVideoFlipCheckbox">Flip my video horizontally</label>
+                </div>
+
+                <div class="settings-option">
+                    <input type="checkbox" id="settingsPttEnabledCheckbox">
+                    <label for="settingsPttEnabledCheckbox">Enable Push-to-Talk (Audio Chat)</label>
+                </div>
+                
+                <div id="pttHotkeySettingsContainer" class="settings-option hidden" style="align-items: baseline;">
+                    <label for="settingsPttKeyBtn" style="margin-right: var(--space-sm); white-space: nowrap;">Hotkey:</label>
+                    <div>
+                        <button id="settingsPttKeyBtn" class="btn btn-outline">Space</button>
+                        <span id="pttKeyInstructions" class="hidden">Press any key... (Esc to cancel)</span>
+                    </div>
+                </div>
+
+                <div class="settings-actions">
+                    <button id="settingsSaveBtn" class="btn">Save Settings</button>
+                </div>
+            </div>
+
         </main>
     </div>
 </div>
-<!-- Hidden iframe for printing -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js')
+    .catch(err => console.log('SW registration failed'));
+}
+</script>
 <iframe id="printFrame" style="display: none;"></iframe>
 <script async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
 <script type="module" src="main.js"></script>

@@ -1,4 +1,3 @@
-// media.js
 
 let localScreenShareStream;
 let localVideoCallStream;
@@ -7,33 +6,40 @@ let localAudioStream;
 let peerVideoElements = {}; // { peerId: { wrapper, video, stream, nicknameP } }
 let peerAudios = {}; // { peerId: audio_element }
 
-// --- New global for local video preview element if it's in the grid ---
+
 let localVideoPreviewElement = null;
+let localVideoFlipped = false; // For video flip setting
+
+
+let pttEnabled = false;
+let pttKey = 'Space';
+let pttKeyDisplay = 'Space';
+let isPttKeyDown = false;
 
 
 let roomApiDep, logStatusDep, showNotificationDep;
 let localGeneratedPeerIdDep;
-let getPeerNicknamesDep;
+let getPeerNicknamesDep, getLocalNicknameDep;
 
 // --- DOM Elements ---
 let startShareBtn, stopShareBtn, remoteVideosContainer;
-let localScreenSharePreviewContainer, localScreenSharePreviewVideo; // For screen share preview
+let localScreenSharePreviewContainer, localScreenSharePreviewVideo; 
 
 let startVideoCallBtn, stopVideoCallBtn, remoteVideoChatContainer;
-let toggleLocalVideoPreviewCheckbox; // For video call preview toggle
+let toggleLocalVideoPreviewCheckbox; 
 
 let startAudioCallBtn, stopAudioCallBtn, audioChatStatus;
 
 function selectMediaDomElements() {
     startShareBtn = document.getElementById('startShareBtn');
     stopShareBtn = document.getElementById('stopShareBtn');
-    remoteVideosContainer = document.getElementById('remoteVideosContainer'); // For remote screen shares
+    remoteVideosContainer = document.getElementById('remoteVideosContainer');
     localScreenSharePreviewContainer = document.getElementById('localScreenSharePreviewContainer');
     localScreenSharePreviewVideo = document.getElementById('localScreenSharePreviewVideo');
 
     startVideoCallBtn = document.getElementById('startVideoCallBtn');
     stopVideoCallBtn = document.getElementById('stopVideoCallBtn');
-    remoteVideoChatContainer = document.getElementById('remoteVideoChatContainer'); // For video call grid
+    remoteVideoChatContainer = document.getElementById('remoteVideoChatContainer');
     toggleLocalVideoPreviewCheckbox = document.getElementById('toggleLocalVideoPreviewCheckbox');
 
     startAudioCallBtn = document.getElementById('startAudioCallBtn');
@@ -51,6 +57,29 @@ export function initMediaFeatures(dependencies) {
     showNotificationDep = dependencies.showNotification;
     localGeneratedPeerIdDep = dependencies.localGeneratedPeerId;
     getPeerNicknamesDep = dependencies.getPeerNicknames;
+    getLocalNicknameDep = dependencies.getLocalNickname;
+
+ 
+    if (typeof dependencies.initialVideoFlip === 'boolean') {
+        localVideoFlipped = dependencies.initialVideoFlip;
+    }
+    if (typeof dependencies.initialPttEnabled === 'boolean') {
+        pttEnabled = dependencies.initialPttEnabled;
+    }
+    if (dependencies.initialPttKey) {
+        pttKey = dependencies.initialPttKey;
+    }
+    if (dependencies.initialPttKeyDisplay) {
+        pttKeyDisplay = dependencies.initialPttKeyDisplay;
+    }
+    
+0
+    if (pttEnabled) {
+        window.addEventListener('keydown', handlePttKeyDown);
+        window.addEventListener('keyup', handlePttKeyUp);
+    }
+    updateAudioChatStatusUI();
+
 
     if(startShareBtn) startShareBtn.addEventListener('click', startScreenSharing);
     if(stopShareBtn) stopShareBtn.addEventListener('click', () => stopLocalScreenShare(true));
@@ -79,6 +108,8 @@ export function initMediaFeatures(dependencies) {
         enableMediaButtons,
         resetMediaUIAndState,
         updatePeerNicknameInUI,
+        setLocalVideoFlip,
+        updatePttSettings,
     };
 }
 
@@ -121,7 +152,7 @@ export function enableMediaButtons() {
     if(startAudioCallBtn && startAudioCallBtn.title !== "Audio not supported") startAudioCallBtn.disabled = false;
     if(stopAudioCallBtn) stopAudioCallBtn.disabled = true;
 
-    if (audioChatStatus) audioChatStatus.classList.add('hidden');
+    updateAudioChatStatusUI(); 
 }
 
 
@@ -256,6 +287,20 @@ function displayRemoteScreenShareStream(stream, peerId) {
     showNotificationDep('screenShareSection');
 }
 
+// --- Video Flip ---
+export function setLocalVideoFlip(shouldFlip, forceApply = false) {
+    if (localVideoFlipped === shouldFlip && !forceApply) return;
+    localVideoFlipped = shouldFlip;
+
+    if (localVideoPreviewElement && localVideoPreviewElement.parentNode) {
+        const videoEl = localVideoPreviewElement.querySelector('video');
+        if (videoEl) {
+            videoEl.style.transform = localVideoFlipped ? 'scaleX(-1)' : 'none';
+        }
+    }
+}
+
+
 // --- Helper functions for local video preview in grid ---
 function addLocalVideoToGrid() {
     if (!localVideoCallStream || !remoteVideoChatContainer || localVideoPreviewElement) return;
@@ -266,11 +311,8 @@ function addLocalVideoToGrid() {
 
     const nicknameP = document.createElement('p');
     let localUserNickname = "You";
-    try { // Gracefully get nickname
-        const nicknames = getPeerNicknamesDep();
-        if (nicknames && nicknames[localGeneratedPeerIdDep]) {
-            localUserNickname = nicknames[localGeneratedPeerIdDep];
-        } else if (typeof getLocalNicknameDep === 'function' && getLocalNicknameDep()) { // Fallback to another getter if exists
+    try { 
+        if (typeof getLocalNicknameDep === 'function' && getLocalNicknameDep()) {
              localUserNickname = getLocalNicknameDep();
         }
     } catch(e) { console.warn("Could not get local nickname for preview:", e)}
@@ -282,11 +324,12 @@ function addLocalVideoToGrid() {
     videoEl.playsinline = true;
     videoEl.muted = true;
     videoEl.srcObject = localVideoCallStream;
+    videoEl.style.transform = localVideoFlipped ? 'scaleX(-1)' : 'none'; // Apply flip state
 
     wrapper.appendChild(nicknameP);
     wrapper.appendChild(videoEl);
 
-    // Add to the beginning of the grid if remoteVideoChatContainer exists
+
     if (remoteVideoChatContainer.firstChild) {
         remoteVideoChatContainer.insertBefore(wrapper, remoteVideoChatContainer.firstChild);
     } else {
@@ -356,8 +399,6 @@ async function stopLocalVideoCall(updateButtons = true) {
         localVideoCallStream = null;
     }
 
-    // if (toggleLocalVideoPreviewCheckbox) toggleLocalVideoPreviewCheckbox.checked = true; // Reset checkbox
-
     if (updateButtons && roomApiDep && startVideoCallBtn && stopVideoCallBtn) {
         startVideoCallBtn.disabled = (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) ? false : true;
         stopVideoCallBtn.disabled = true;
@@ -365,7 +406,7 @@ async function stopLocalVideoCall(updateButtons = true) {
 }
 
 function handleIncomingVideoChatStream(stream, peerId) {
-    if (peerId === localGeneratedPeerIdDep) return; // Local preview is handled by addLocalVideoToGrid
+    if (peerId === localGeneratedPeerIdDep) return; 
     const streamPeerNickname = getPeerNicknamesDep()[peerId] || `User ${peerId.substring(0, 6)}`;
     logStatusDep(`Receiving Video Chat stream from ${streamPeerNickname}.`);
 
@@ -402,8 +443,6 @@ function handleIncomingVideoChatStream(stream, peerId) {
     stream.onremovetrack = () => {
         if (stream.getTracks().length === 0 && peerVideoElements[peerId]) {
             if (peerVideoElements[peerId].video) peerVideoElements[peerId].video.srcObject = null;
-            // Optionally remove wrapper or hide it:
-            // if (peerVideoElements[peerId].wrapper) peerVideoElements[peerId].wrapper.remove();
             logStatusDep(`Video chat stream ended from ${streamPeerNickname}`);
         }
     };
@@ -419,7 +458,90 @@ function handleIncomingVideoChatStream(stream, peerId) {
 }
 
 
-// --- Audio Chat ---
+// --- Audio Chat & PTT ---
+function updateAudioChatStatusUI() {
+    if (!audioChatStatus) return;
+    if (localAudioStream) {
+        audioChatStatus.classList.remove('hidden');
+        if (pttEnabled) {
+            if (isPttKeyDown) {
+                audioChatStatus.textContent = `PTT: Transmitting... (Release '${pttKeyDisplay}' to mute)`;
+            } else {
+                audioChatStatus.textContent = `PTT: Muted (Press '${pttKeyDisplay}' to talk)`;
+            }
+        } else {
+            audioChatStatus.textContent = "Audio call active. You are transmitting audio.";
+        }
+    } else {
+        audioChatStatus.classList.add('hidden');
+        audioChatStatus.textContent = "Audio call active."; // Default reset
+    }
+}
+
+export function updatePttSettings(enabled, key, display) {
+    const oldPttEnabled = pttEnabled;
+    pttEnabled = enabled;
+    pttKey = key;
+    pttKeyDisplay = display;
+
+    if (localAudioStream) {
+        if (pttEnabled) {
+            if (!isPttKeyDown) { // Mute if PTT just enabled and key not pressed
+                localAudioStream.getAudioTracks().forEach(track => track.enabled = false);
+            }
+        } else { // PTT disabled, ensure audio is unmuted
+            localAudioStream.getAudioTracks().forEach(track => track.enabled = true);
+            isPttKeyDown = false; // Reset PTT key state
+        }
+    }
+
+    if (pttEnabled && !oldPttEnabled) {
+        window.addEventListener('keydown', handlePttKeyDown);
+        window.addEventListener('keyup', handlePttKeyUp);
+    } else if (!pttEnabled && oldPttEnabled) {
+        window.removeEventListener('keydown', handlePttKeyDown);
+        window.removeEventListener('keyup', handlePttKeyUp);
+        isPttKeyDown = false; 
+    }
+    updateAudioChatStatusUI();
+}
+
+function handlePttKeyDown(event) {
+    // Ignore if input field is focused or capturing key
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) return;
+    const settingsModal = document.getElementById('settingsModal');
+    if (settingsModal && !settingsModal.classList.contains('hidden')) { // Ignore if settings modal is open
+        const pttKeyInstructions = document.getElementById('pttKeyInstructions');
+        if (pttKeyInstructions && !pttKeyInstructions.classList.contains('hidden')) { // And actively capturing key
+             return;
+        }
+    }
+
+
+    if (!pttEnabled || event.code !== pttKey || isPttKeyDown || !localAudioStream) return;
+    isPttKeyDown = true;
+    localAudioStream.getAudioTracks().forEach(track => track.enabled = true);
+    updateAudioChatStatusUI();
+}
+
+function handlePttKeyUp(event) {
+    // Ignore if input field is focused
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) return;
+    const settingsModal = document.getElementById('settingsModal');
+     if (settingsModal && !settingsModal.classList.contains('hidden')) { // Ignore if settings modal is open
+        const pttKeyInstructions = document.getElementById('pttKeyInstructions');
+        if (pttKeyInstructions && !pttKeyInstructions.classList.contains('hidden')) { // And actively capturing key
+             return;
+        }
+    }
+
+    if (!pttEnabled || event.code !== pttKey || !localAudioStream || !isPttKeyDown) return; // only trigger if key was actually down
+    isPttKeyDown = false;
+    localAudioStream.getAudioTracks().forEach(track => track.enabled = false);
+    updateAudioChatStatusUI();
+}
+
+
 async function startLocalAudioCall() {
     if (!roomApiDep) { logStatusDep("Not in a room to start audio call.", true); return; }
     try {
@@ -435,12 +557,14 @@ async function startLocalAudioCall() {
 
         await roomApiDep.addStream(localAudioStream, null, { streamType: 'audiochat' });
 
+        if (pttEnabled && !isPttKeyDown) { // If PTT active, mute initially
+            localAudioStream.getAudioTracks().forEach(track => track.enabled = false);
+        }
+
         if(startAudioCallBtn) startAudioCallBtn.disabled = true;
         if(stopAudioCallBtn) stopAudioCallBtn.disabled = false;
-        if(audioChatStatus) {
-            audioChatStatus.textContent = "Audio call active. You are transmitting audio.";
-            audioChatStatus.classList.remove('hidden');
-        }
+        
+        updateAudioChatStatusUI();
         showNotificationDep('audioChatSection');
 
         localAudioStream.getTracks().forEach(track => {
@@ -462,7 +586,7 @@ async function startLocalAudioCall() {
             startAudioCallBtn.disabled = (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) ? false : true;
             stopAudioCallBtn.disabled = true;
         }
-        if(audioChatStatus) audioChatStatus.classList.add('hidden');
+        updateAudioChatStatusUI();
     }
 }
 
@@ -473,15 +597,18 @@ async function stopLocalAudioCall(updateButtons = true) {
             try { await roomApiDep.removeStream(localAudioStream, null, { streamType: 'audiochat' }); }
             catch (e) { console.error("Exception calling roomApi.removeStream for audio call:", e); }
         }
+        // Ensure tracks are enabled before stopping so they aren't left muted by PTT
+        localAudioStream.getAudioTracks().forEach(track => track.enabled = true);
         localAudioStream.getTracks().forEach(track => { track.onended = null; track.stop(); });
         localAudioStream = null;
     }
+    isPttKeyDown = false; // Reset PTT key state
 
     if (updateButtons && roomApiDep && startAudioCallBtn && stopAudioCallBtn) {
         startAudioCallBtn.disabled = (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) ? false : true;
         stopAudioCallBtn.disabled = true;
     }
-    if(audioChatStatus) audioChatStatus.classList.add('hidden');
+    updateAudioChatStatusUI();
 }
 
 function handleIncomingAudioChatStream(stream, peerId) {
@@ -497,7 +624,7 @@ function handleIncomingAudioChatStream(stream, peerId) {
     let audioEl = peerAudios[peerId];
     if (!audioEl) {
         audioEl = document.createElement('audio');
-        document.body.appendChild(audioEl);
+        document.body.appendChild(audioEl); // Needs to be in DOM to play in some browsers
         peerAudios[peerId] = audioEl;
     }
 
@@ -588,6 +715,7 @@ export function resetMediaUIAndState() {
     if (localScreenShareStream) { localScreenShareStream.getTracks().forEach(t => t.stop()); localScreenShareStream = null; }
     if (localVideoCallStream) { localVideoCallStream.getTracks().forEach(t => t.stop()); localVideoCallStream = null; }
     if (localAudioStream) { localAudioStream.getTracks().forEach(t => t.stop()); localAudioStream = null; }
+    isPttKeyDown = false; // Reset PTT key state on full reset
 
     if(startShareBtn) { startShareBtn.title = ""; }
     if(remoteVideosContainer) remoteVideosContainer.innerHTML = '';
@@ -600,7 +728,7 @@ export function resetMediaUIAndState() {
     if (toggleLocalVideoPreviewCheckbox) toggleLocalVideoPreviewCheckbox.checked = true;
 
 
-    if(audioChatStatus) audioChatStatus.classList.add('hidden');
+    updateAudioChatStatusUI(); // Reset PTT status display
     Object.values(peerAudios).forEach(audioEl => {
         if (audioEl) { audioEl.pause(); audioEl.srcObject = null; if(audioEl.parentNode) audioEl.remove(); }
     });
@@ -613,16 +741,13 @@ export function updatePeerNicknameInUI(peerId, newNickname) {
     if (peerVideoElements[peerId] && peerVideoElements[peerId].nicknameP) {
         peerVideoElements[peerId].nicknameP.textContent = newNickname;
     }
-    // Update local preview nickname if it's showing and matches the peerId being updated
+    
     if (localVideoPreviewElement && peerId === localGeneratedPeerIdDep) {
         const nicknameP = localVideoPreviewElement.querySelector('p');
         if (nicknameP) {
             let currentLocalNickname = "You";
-             try { // Gracefully get nickname
-                const nicknames = getPeerNicknamesDep();
-                if (nicknames && nicknames[localGeneratedPeerIdDep]) {
-                    currentLocalNickname = nicknames[localGeneratedPeerIdDep];
-                } else if (typeof getLocalNicknameDep === 'function' && getLocalNicknameDep()) {
+             try { 
+                if (typeof getLocalNicknameDep === 'function' && getLocalNicknameDep()) {
                      currentLocalNickname = getLocalNicknameDep();
                 }
             } catch(e) { /* ignore */ }
