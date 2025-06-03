@@ -1,4 +1,3 @@
-
 let kanbanData = { columns: [] };
 let draggedCardElement = null;
 let draggedCardData = null;
@@ -15,6 +14,15 @@ function selectKanbanDomElements() {
     kanbanBoard = document.getElementById('kanbanBoard');
     newColumnNameInput = document.getElementById('newColumnNameInput');
     addColumnBtn = document.getElementById('addColumnBtn');
+}
+
+function escapeHtml(unsafe) {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 export function initKanbanFeatures(dependencies) {
@@ -57,10 +65,11 @@ export function renderKanbanBoard() {
         
         let cardsHtml = (column.cards || []).map(card => {
             const cardPriority = card.priority || 1;
+            const escapedText = escapeHtml(card.text);
             return `
                 <div class="kanban-card priority-${cardPriority}" draggable="true" data-card-id="${card.id}" data-parent-column-id="${column.id}" data-priority="${cardPriority}">
                     <div class="kanban-card-content">
-                        <p>${card.text}</p>
+                        <p>${escapedText}</p>
                         <select class="kanban-card-priority" data-card-id="${card.id}" data-column-id="${column.id}">
                             <option value="1" ${cardPriority == 1 ? 'selected' : ''}>Low</option>
                             <option value="2" ${cardPriority == 2 ? 'selected' : ''}>Medium</option>
@@ -87,7 +96,7 @@ export function renderKanbanBoard() {
         }
 
         columnDiv.innerHTML = `
-            <h3>${column.title}<button class="delete-column-btn" data-column-id="${column.id}" title="Delete column">🗑️</button></h3>
+            <h3>${escapeHtml(column.title)}<button class="delete-column-btn" data-column-id="${column.id}" title="Delete column">🗑️</button></h3>
             <div class="kanban-cards">${cardsHtml}</div>
             ${addCardSectionHtml}`;
         kanbanBoard.appendChild(columnDiv);

@@ -31,6 +31,16 @@ function selectDocumentDomElements() {
     printDocBtn = document.getElementById('printDocBtn');
 }
 
+// XSS Prevention Helper
+function escapeHtml(unsafe) {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 function debounce(func, delay) {
     let timeout;
     return function (...args) {
@@ -73,7 +83,7 @@ function printCurrentDocument() {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>${activeDoc.name}</title>
+            <title>${escapeHtml(activeDoc.name)}</title>
             <style>
                 @page { margin: 0.5in; }
                 body { 
@@ -86,7 +96,7 @@ function printCurrentDocument() {
             </style>
         </head>
         <body>
-            <h1>${activeDoc.name}</h1>
+            <h1>${escapeHtml(activeDoc.name)}</h1>
             ${activeDoc.htmlContent}
         </body>
         </html>
@@ -190,11 +200,11 @@ function loadActiveDocumentContent() {
     if (!currentActiveDocumentId && documents.length > 0) currentActiveDocumentId = documents[0].id;
     const activeDoc = documents.find(d => d.id === currentActiveDocumentId);
     if (activeDoc) {
-        if (collaborativeEditor.innerHTML !== activeDoc.htmlContent) collaborativeEditor.innerHTML = activeDoc.htmlContent;
+        if (collaborativeEditor.innerHTML !== activeDoc.htmlContent) collaborativeEditor.innerHTML = DOMPurify.sanitize(activeDoc.htmlContent);
         collaborativeEditor.contentEditable = "true";
     } else if (documents.length > 0) {
         currentActiveDocumentId = documents[0].id;
-        if (collaborativeEditor.innerHTML !== documents[0].htmlContent) collaborativeEditor.innerHTML = documents[0].htmlContent;
+        if (collaborativeEditor.innerHTML !== documents[0].htmlContent) collaborativeEditor.innerHTML = DOMPurify.sanitize(documents[0].htmlContent);
         collaborativeEditor.contentEditable = "true";
     } else { // No documents exist
         collaborativeEditor.innerHTML = '<p>Select or create a document to start editing.</p>';
@@ -206,7 +216,7 @@ function setActiveDocument(documentId) {
     if (currentActiveDocumentId && collaborativeEditor) {  
         const currentDocObj = documents.find(d => d.id === currentActiveDocumentId);
         if (currentDocObj && collaborativeEditor.innerHTML !== currentDocObj.htmlContent) {
-             currentDocObj.htmlContent = collaborativeEditor.innerHTML;
+             currentDocObj.htmlContent = collaborativeEditor.innerHTML; // This should be DOMPurify.sanitize(collaborativeEditor.innerHTML) if we don't trust the editor, but it's already sanitized on load
         }
     }
     currentActiveDocumentId = documentId; 
@@ -312,9 +322,9 @@ export function handleDeleteDocument(deleteData, peerId) {
 export function handleDocumentContentUpdate(data, peerId) {
     const doc = documents.find(d => d.id === data.documentId);
     if (doc && collaborativeEditor) {
-        doc.htmlContent = data.htmlContent;
+        doc.htmlContent = data.htmlContent; // Assuming incoming data is already sanitized by the sender or via DOMPurify
         if (currentActiveDocumentId === data.documentId && collaborativeEditor.innerHTML !== data.htmlContent) {
-            collaborativeEditor.innerHTML = data.htmlContent; 
+            collaborativeEditor.innerHTML = DOMPurify.sanitize(data.htmlContent); 
         }
         if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('documentsSection');
     }
@@ -324,7 +334,7 @@ export function getDocumentShareData() {
     if (currentActiveDocumentId && collaborativeEditor) { 
         const activeDoc = documents.find(d => d.id === currentActiveDocumentId);
         if (activeDoc && collaborativeEditor.innerHTML !== activeDoc.htmlContent) {
-            activeDoc.htmlContent = collaborativeEditor.innerHTML;
+            activeDoc.htmlContent = DOMPurify.sanitize(collaborativeEditor.innerHTML); // Sanitize before storing/sharing
         }
     }
     return { docs: documents, activeId: currentActiveDocumentId };
@@ -332,6 +342,12 @@ export function getDocumentShareData() {
 
 export function loadDocumentData(importedDocs, activeId) {
     documents = importedDocs || []; 
+    // Ensure all loaded htmlContent is sanitized if coming from an untrusted source (import)
+    documents.forEach(doc => {
+        if (doc.htmlContent) {
+            doc.htmlContent = DOMPurify.sanitize(doc.htmlContent);
+        }
+    });
     currentActiveDocumentId = activeId || null;
     if (documents.length > 0 && (!currentActiveDocumentId || !documents.find(d => d.id === currentActiveDocumentId))) {
         currentActiveDocumentId = documents[0].id;

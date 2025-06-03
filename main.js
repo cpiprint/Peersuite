@@ -1,16 +1,17 @@
+// main.js
 
 import { joinRoom, selfId as localGeneratedPeerId } from './trystero-torrent.min.js';
-import { 
-    initShareFeatures, 
-    getShareableData, 
-    loadShareableData, 
-    resetShareModuleStates, 
-    setShareModulePeerInfo, 
-    handleShareModulePeerLeave 
+import {
+    initShareFeatures,
+    getShareableData,
+    loadShareableData,
+    resetShareModuleStates,
+    setShareModulePeerInfo,
+    handleShareModulePeerLeave
 } from './share.js';
 import { initMediaFeatures, handleMediaPeerStream, stopAllLocalMedia, setupMediaForNewPeer, cleanupMediaForPeer } from './media.js';
 
-const APP_ID = 'PeerSuite-0.1.1-may31';
+const APP_ID = 'PeerSuite-0.1.2-jun01';
 
 const wordList = [
     "able", "acid", "army", "away", "baby", "back", "ball", "band", "bank", "base",
@@ -44,21 +45,16 @@ const statusDiv = document.getElementById('status');
 const importWorkspaceBtn = document.getElementById('importWorkspaceBtn');
 const importFilePicker = document.getElementById('importFilePicker');
 const exportWorkspaceBtnSidebar = document.getElementById('exportWorkspaceBtnSidebar');
-
 const currentRoomCodeSpan = document.getElementById('currentRoomCodeSpan');
 const copyRoomCodeBtn = document.getElementById('copyRoomCodeBtn');
 const currentNicknameSpan = document.getElementById('currentNicknameSpan');
 const themeToggle = document.getElementById('themeToggle');
-const sidebarButtons = document.querySelectorAll('.sidebar-button'); // This will now include settingsSidebarBtn
-const contentSections = document.querySelectorAll('.content-section'); // This will now include settingsSection
-const userCountSpan = document.getElementById('userCountSpan'); 
-const userListUl = document.getElementById('userList'); 
-
-// Loading Status Bar Elements
+const sidebarButtons = document.querySelectorAll('.sidebar-button');
+const contentSections = document.querySelectorAll('.content-section');
+const userCountSpan = document.getElementById('userCountSpan');
+const userListUl = document.getElementById('userList');
 const loadingStatusBar = document.getElementById('loadingStatusBar');
 const loadingStatusText = document.getElementById('loadingStatusText');
-
-// Settings Section Elements 
 const settingsSidebarBtn = document.getElementById('settingsSidebarBtn');
 const settingsSection = document.getElementById('settingsSection');
 const settingsNicknameInput = document.getElementById('settingsNicknameInput');
@@ -69,21 +65,18 @@ const settingsPttKeyBtn = document.getElementById('settingsPttKeyBtn');
 const pttKeyInstructions = document.getElementById('pttKeyInstructions');
 const settingsSaveBtn = document.getElementById('settingsSaveBtn');
 let isCapturingPttKey = false;
-
-// Global State for main.js
 let roomApi;
 let localNickname = '';
 let currentRoomId = '';
-let currentActiveSection = 'chatSection'; 
+let currentActiveSection = 'chatSection';
 let peerNicknames = {};
 let isHost = false;
 let importedWorkspaceState = null;
-
 let peerSuiteSettings = {
     videoFlip: false,
     pttEnabled: false,
-    pttKey: 'Space', 
-    pttKeyDisplay: 'Space' 
+    pttKey: 'Space',
+    pttKeyDisplay: 'Space'
 };
 
 // Trystero action send/receive function pairs
@@ -97,20 +90,29 @@ let sendCreateDocument, onCreateDocument;
 let sendRenameDocument, onRenameDocument;
 let sendDeleteDocument, onDeleteDocument;
 let sendDocumentContentUpdate, onDocumentContentUpdate;
-let sendCreateChannel, onCreateChannel; 
-let sendInitialChannels, onInitialChannels; 
+let sendCreateChannel, onCreateChannel;
+let sendInitialChannels, onInitialChannels;
 
 const CRYPTO_ALGO = 'AES-GCM';
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+
+// XSS Prevention Helper
+function escapeHtml(unsafe) {
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
 
 function loadSettings() {
     const savedSettings = localStorage.getItem('peerSuiteAppSettings');
     if (savedSettings) {
         try {
             const parsedSettings = JSON.parse(savedSettings);
-            // Ensure all expected keys exist before overriding defaults
-            peerSuiteSettings = { 
+                      peerSuiteSettings = {
                 videoFlip: typeof parsedSettings.videoFlip === 'boolean' ? parsedSettings.videoFlip : false,
                 pttEnabled: typeof parsedSettings.pttEnabled === 'boolean' ? parsedSettings.pttEnabled : false,
                 pttKey: typeof parsedSettings.pttKey === 'string' ? parsedSettings.pttKey : 'Space',
@@ -118,12 +120,11 @@ function loadSettings() {
             };
         } catch (e) {
             console.error("Error parsing saved settings, using defaults.", e);
-            // Fallback to defaults if parsing fails
             peerSuiteSettings = { videoFlip: false, pttEnabled: false, pttKey: 'Space', pttKeyDisplay: 'Space' };
         }
     }
 
-    populateSettingsSection(); 
+    populateSettingsSection();
 
     if (window.mediaModuleRef && window.mediaModuleRef.setLocalVideoFlip) {
         window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip);
@@ -154,16 +155,16 @@ function handlePttKeyCapture(event) {
     event.stopPropagation();
 
     if (event.key === 'Escape') {
-       
+
     } else {
         peerSuiteSettings.pttKey = event.code;
         if (event.code === 'Space') peerSuiteSettings.pttKeyDisplay = 'Space';
         else if (event.key.length === 1) peerSuiteSettings.pttKeyDisplay = event.key.toUpperCase();
         else peerSuiteSettings.pttKeyDisplay = event.key;
-        
+
         if (settingsPttKeyBtn) settingsPttKeyBtn.textContent = peerSuiteSettings.pttKeyDisplay;
     }
-    
+
     isCapturingPttKey = false;
     if (pttKeyInstructions) pttKeyInstructions.classList.add('hidden');
     if (settingsPttKeyBtn) settingsPttKeyBtn.classList.remove('hidden');
@@ -179,7 +180,7 @@ if (settingsPttEnabledCheckbox) {
 
 if (settingsPttKeyBtn) {
     settingsPttKeyBtn.addEventListener('click', () => {
-        if (isCapturingPttKey) return; 
+        if (isCapturingPttKey) return;
         isCapturingPttKey = true;
         settingsPttKeyBtn.classList.add('hidden');
         if(pttKeyInstructions) pttKeyInstructions.classList.remove('hidden');
@@ -193,7 +194,7 @@ if (settingsSaveBtn) {
         if (newNickname && newNickname !== localNickname) {
             localNickname = newNickname;
             localStorage.setItem('viewPartyNickname', localNickname);
-            if(currentNicknameSpan) currentNicknameSpan.textContent = localNickname;
+            if(currentNicknameSpan) currentNicknameSpan.textContent = escapeHtml(localNickname); // Escape here for display
             updateUserList();
             if (roomApi && sendNickname) {
                 await sendNickname({ nickname: localNickname, initialJoin: false, isHost: isHost });
@@ -237,7 +238,7 @@ function initTheme() {
     const savedTheme = localStorage.getItem('viewPartyTheme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
     if (themeToggle) themeToggle.checked = savedTheme === 'dark';
-    const shareModule = window.shareModuleRef; 
+    const shareModule = window.shareModuleRef;
     if (shareModule && shareModule.redrawWhiteboardFromHistoryIfVisible) {
         shareModule.redrawWhiteboardFromHistoryIfVisible();
     }
@@ -256,7 +257,7 @@ if (themeToggle) {
 
 sidebarButtons.forEach(button => {
 
-    if (button.id === 'exportWorkspaceBtnSidebar') return; 
+    if (button.id === 'exportWorkspaceBtnSidebar') return;
 
     button.addEventListener('click', () => {
         const targetSectionId = button.getAttribute('data-section');
@@ -266,9 +267,9 @@ sidebarButtons.forEach(button => {
         if (currentActiveSection === targetSectionId && targetSectionElement && !targetSectionElement.classList.contains('hidden')) {
             return;
         }
-        
-        sidebarButtons.forEach(btn => { 
-            if (btn.id !== 'exportWorkspaceBtnSidebar') btn.classList.remove('active'); 
+
+        sidebarButtons.forEach(btn => {
+            if (btn.id !== 'exportWorkspaceBtnSidebar') btn.classList.remove('active');
         });
         button.classList.add('active');
         currentActiveSection = targetSectionId;
@@ -276,7 +277,7 @@ sidebarButtons.forEach(button => {
         contentSections.forEach(section => {
             section.classList.toggle('hidden', section.id !== targetSectionId);
         });
-        
+
         clearNotification(targetSectionId);
 
         const shareModule = window.shareModuleRef;
@@ -292,10 +293,10 @@ sidebarButtons.forEach(button => {
             }
         }
         if (targetSectionId === 'videoChatSection' && window.mediaModuleRef && window.mediaModuleRef.setLocalVideoFlip) {
-            window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip, true); 
+            window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip, true);
         }
         if (targetSectionId === 'settingsSection') {
-            populateSettingsSection(); 
+            populateSettingsSection();
             if (isCapturingPttKey) {
                 isCapturingPttKey = false;
                 if (pttKeyInstructions) pttKeyInstructions.classList.add('hidden');
@@ -310,7 +311,7 @@ sidebarButtons.forEach(button => {
 function showNotification(sectionId) {
     const targetSectionElement = document.getElementById(sectionId);
     if (sectionId === currentActiveSection && targetSectionElement && !targetSectionElement.classList.contains('hidden')) {
-        return; 
+        return;
     }
     const dot = document.querySelector(`.notification-dot[data-notification-for="${sectionId}"]`);
     if (dot) dot.classList.remove('hidden');
@@ -339,25 +340,33 @@ function generateMemorableRoomCode() {
 
 function updateUserList() {
     if (!userListUl) return;
-    userListUl.innerHTML = '';
+    userListUl.innerHTML = ''; // Clear existing list
     let count = 0;
 
+    // Add self
     const selfLi = document.createElement('li');
-    selfLi.innerHTML = `<span class="status-badge"></span> ${localNickname} (You)${isHost ? ' (Host)' : ''}`;
+    const selfBadge = document.createElement('span');
+    selfBadge.className = 'status-badge';
+    selfLi.appendChild(selfBadge);
+    selfLi.appendChild(document.createTextNode(` ${escapeHtml(localNickname)} (You)${isHost ? ' (Host)' : ''}`));
     userListUl.appendChild(selfLi);
     count++;
 
+    // Add peers
     for (const peerId in peerNicknames) {
         const nickname = peerNicknames[peerId];
         const li = document.createElement('li');
-        li.innerHTML = `<span class="status-badge"></span> ${nickname}`;
+        const peerBadge = document.createElement('span');
+        peerBadge.className = 'status-badge';
+        li.appendChild(peerBadge);
+        li.appendChild(document.createTextNode(` ${escapeHtml(nickname)}`));
         li.classList.add('peer-name');
-        li.title = `Click to private message ${nickname}`;
+        li.title = `Click to private message ${escapeHtml(nickname)}`; // Escape nickname for title
         li.dataset.peerId = peerId;
         li.addEventListener('click', () => {
             const shareModule = window.shareModuleRef;
             if (shareModule && shareModule.primePrivateMessage) {
-                shareModule.primePrivateMessage(nickname);
+                shareModule.primePrivateMessage(nickname); // Original nickname for function
             }
         });
         userListUl.appendChild(li);
@@ -365,6 +374,7 @@ function updateUserList() {
     }
     if (userCountSpan) userCountSpan.textContent = count;
 }
+
 
 function findPeerIdByNickname(nickname) {
     for (const id in peerNicknames) {
@@ -375,10 +385,9 @@ function findPeerIdByNickname(nickname) {
     return null;
 }
 
-// --- Import/Export ---
 async function deriveKeyFromPassword_ImportExport(password, salt) {
     const keyMaterial = await crypto.subtle.importKey("raw", textEncoder.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
-    return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" }, keyMaterial, { name: CRYPTO_ALGO, length: 256 }, true, ["encrypt", "decrypt"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: 750000, hash: "SHA-256" }, keyMaterial, { name: CRYPTO_ALGO, length: 256 }, true, ["encrypt", "decrypt"]);
 }
 
 if (exportWorkspaceBtnSidebar) {
@@ -394,7 +403,7 @@ if (exportWorkspaceBtnSidebar) {
             const workspaceState = {
                 ...shareData,
                 roomId: currentRoomId,
-                version: APP_ID 
+                version: APP_ID
             };
             const serializedState = JSON.stringify(workspaceState);
             const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -409,9 +418,9 @@ if (exportWorkspaceBtnSidebar) {
             document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(link.href);
             logStatus(`Workspace exported successfully as ${fileName}.`);
             hideLoadingStatus();
-        } catch (error) { 
-            console.error("Error exporting workspace:", error); 
-            logStatus("Error exporting workspace: " + error.message, true); 
+        } catch (error) {
+            console.error("Error exporting workspace:", error);
+            logStatus("Error exporting workspace: " + error.message, true);
             hideLoadingStatus();
         }
     });
@@ -434,22 +443,22 @@ if (importFilePicker) {
             const decryptedStateString = textDecoder.decode(decryptedBuffer);
             importedWorkspaceState = JSON.parse(decryptedStateString);
             if (!importedWorkspaceState ||
-                typeof importedWorkspaceState.kanbanData === 'undefined' || 
+                typeof importedWorkspaceState.kanbanData === 'undefined' ||
                 typeof importedWorkspaceState.whiteboardHistory === 'undefined' ||
-                typeof importedWorkspaceState.documents === 'undefined' || 
+                typeof importedWorkspaceState.documents === 'undefined' ||
                 typeof importedWorkspaceState.currentActiveDocumentId === 'undefined' ||
                 typeof importedWorkspaceState.channels === 'undefined' ||
-                typeof importedWorkspaceState.chatHistory === 'undefined' 
-            ) { 
+                typeof importedWorkspaceState.chatHistory === 'undefined'
+            ) {
                 throw new Error("Invalid or incomplete workspace file structure (post-refactor).");
             }
             if (importedWorkspaceState.roomId && roomIdInput && !roomIdInput.value) { roomIdInput.value = importedWorkspaceState.roomId; }
             logStatus(`Workspace "${file.name}" decrypted and ready. Enter workspace password and create/join to apply.`);
             if(statusDiv) statusDiv.textContent += ` (Imported ${importedWorkspaceState.roomId || 'workspace data'})`;
             hideLoadingStatus();
-        } catch (error) { 
-            console.error("Error importing workspace:", error); 
-            logStatus("Error importing: " + (error.message.includes("decrypt") ? "Incorrect password or corrupted file." : error.message), true); 
+        } catch (error) {
+            console.error("Error importing workspace:", error);
+            logStatus("Error importing: " + (error.message.includes("decrypt") ? "Incorrect password or corrupted file." : error.message), true);
             importedWorkspaceState = null;
             hideLoadingStatus();
         } finally { importFilePicker.value = ''; }
@@ -457,14 +466,13 @@ if (importFilePicker) {
 }
 
 
-// --- Room Lifecycle & P2P Setup ---
 async function joinRoomAndSetup() {
     localNickname = nicknameInput.value.trim();
     if (!localNickname) {
         logStatus("Please enter a nickname.", true);
         return;
     }
-    localStorage.setItem('viewPartyNickname', localNickname); 
+    localStorage.setItem('viewPartyNickname', localNickname);
     populateSettingsSection();
 
     const roomPassword = roomPasswordInput.value;
@@ -544,13 +552,13 @@ async function joinRoomAndSetup() {
         [sendRenameDocument, onRenameDocument] = roomApi.makeAction('renDoc');
         [sendDeleteDocument, onDeleteDocument] = roomApi.makeAction('delDoc');
         [sendDocumentContentUpdate, onDocumentContentUpdate] = roomApi.makeAction('docUpd');
-        [sendCreateChannel, onCreateChannel] = roomApi.makeAction('createChan'); 
-        [sendInitialChannels, onInitialChannels] = roomApi.makeAction('initChans'); 
+        [sendCreateChannel, onCreateChannel] = roomApi.makeAction('createChan');
+        [sendInitialChannels, onInitialChannels] = roomApi.makeAction('initChans');
 
         const shareModuleDeps = {
             sendChatMessage, sendPrivateMessage, sendFileMeta, sendFileChunk,
             sendChatHistory, sendCreateChannel, sendInitialChannels,
-            sendDrawCommand, sendInitialWhiteboard, 
+            sendDrawCommand, sendInitialWhiteboard,
             sendKanbanUpdate, sendInitialKanban,
             sendInitialDocuments, sendCreateDocument, sendRenameDocument,
             sendDeleteDocument, sendDocumentContentUpdate,
@@ -560,17 +568,17 @@ async function joinRoomAndSetup() {
             getIsHost: () => isHost,
             getLocalNickname: () => localNickname,
             findPeerIdByNicknameFnc: findPeerIdByNickname,
-            getImportedWorkspaceState: () => importedWorkspaceState, 
+            getImportedWorkspaceState: () => importedWorkspaceState,
             clearImportedWorkspaceState: () => { importedWorkspaceState = null; },
             currentRoomId: currentRoomId,
         };
-        window.shareModuleRef = initShareFeatures(shareModuleDeps); 
-        
+        window.shareModuleRef = initShareFeatures(shareModuleDeps);
+
         const mediaModuleDeps = {
             roomApi, logStatus, showNotification,
             localGeneratedPeerId,
             getPeerNicknames: () => peerNicknames,
-            getLocalNickname: () => localNickname, 
+            getLocalNickname: () => localNickname,
             initialVideoFlip: peerSuiteSettings.videoFlip,
             initialPttEnabled: peerSuiteSettings.pttEnabled,
             initialPttKey: peerSuiteSettings.pttKey,
@@ -589,21 +597,21 @@ async function joinRoomAndSetup() {
         onPrivateMessage((data, peerId) => window.shareModuleRef.handlePrivateMessage(data, peerId));
         onFileMeta((data, peerId) => window.shareModuleRef.handleFileMeta(data, peerId));
         onFileChunk((data, peerId, chunkMeta) => window.shareModuleRef.handleFileChunk(data, peerId, chunkMeta));
-        
+
         onDrawCommand((data, peerId) => window.shareModuleRef.handleDrawCommand(data, peerId));
         onInitialWhiteboard((data, peerId) => window.shareModuleRef.handleInitialWhiteboard(data, peerId));
         onKanbanUpdate((data, peerId) => window.shareModuleRef.handleKanbanUpdate(data, peerId));
         onInitialKanban((data, peerId) => window.shareModuleRef.handleInitialKanban(data, peerId));
-        
+
         onChatHistory((data, peerId) => window.shareModuleRef.handleChatHistory(data, peerId));
         onInitialDocuments((data, peerId) => window.shareModuleRef.handleInitialDocuments(data, peerId));
         onCreateDocument((data, peerId) => window.shareModuleRef.handleCreateDocument(data, peerId));
         onRenameDocument((data, peerId) => window.shareModuleRef.handleRenameDocument(data, peerId));
         onDeleteDocument((data, peerId) => window.shareModuleRef.handleDeleteDocument(data, peerId));
         onDocumentContentUpdate((data, peerId) => window.shareModuleRef.handleDocumentContentUpdate(data, peerId));
-        
-        onCreateChannel((data, peerId) => window.shareModuleRef.handleCreateChannel(data, peerId)); 
-        onInitialChannels((data, peerId) => window.shareModuleRef.handleInitialChannels(data, peerId)); 
+
+        onCreateChannel((data, peerId) => window.shareModuleRef.handleCreateChannel(data, peerId));
+        onInitialChannels((data, peerId) => window.shareModuleRef.handleInitialChannels(data, peerId));
 
         onNickname(async (nicknameData, peerId) => {
             const { nickname, initialJoin, isHost: peerIsHost } = nicknameData;
@@ -612,10 +620,10 @@ async function joinRoomAndSetup() {
             if(window.shareModuleRef && setShareModulePeerInfo) setShareModulePeerInfo(peerNicknames);
 
             if (initialJoin && oldNickname !== nickname) {
-                if(window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`${nickname}${peerIsHost ? ' (Host)' : ''} has joined.`);
+                if(window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`${escapeHtml(nickname)}${peerIsHost ? ' (Host)' : ''} has joined.`);
                 if (sendNickname) await sendNickname({ nickname: localNickname, initialJoin: false, isHost: isHost }, peerId);
             } else if (oldNickname && oldNickname !== nickname) {
-                 if(window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`${oldNickname} is now known as ${nickname}.`);
+                 if(window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`${escapeHtml(oldNickname)} is now known as ${escapeHtml(nickname)}.`);
             }
             updateUserList();
              if (window.mediaModuleRef && window.mediaModuleRef.updatePeerNicknameInUI) {
@@ -626,22 +634,22 @@ async function joinRoomAndSetup() {
         roomApi.onPeerJoin(async (joinedPeerId) => {
             showLoadingStatus("Syncing with new peer...");
             if (sendNickname) await sendNickname({ nickname: localNickname, initialJoin: true, isHost: isHost }, joinedPeerId);
-            
+
             if (window.mediaModuleRef && typeof setupMediaForNewPeer === 'function') setupMediaForNewPeer(joinedPeerId);
 
-            if (isHost && window.shareModuleRef && window.shareModuleRef.sendFullStateToPeer) { 
-                 window.shareModuleRef.sendFullStateToPeer(joinedPeerId); 
+            if (isHost && window.shareModuleRef && window.shareModuleRef.sendFullStateToPeer) {
+                 window.shareModuleRef.sendFullStateToPeer(joinedPeerId);
             }
             hideLoadingStatus();
         });
 
         roomApi.onPeerLeave(leftPeerId => {
             const departedUser = peerNicknames[leftPeerId] || `Peer ${leftPeerId.substring(0, 6)}`;
-            if(window.shareModuleRef && window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`${departedUser} has left.`);
+            if(window.shareModuleRef && window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`${escapeHtml(departedUser)} has left.`);
             delete peerNicknames[leftPeerId];
             updateUserList();
             if(window.shareModuleRef && typeof setShareModulePeerInfo === 'function') setShareModulePeerInfo(peerNicknames);
-            if(typeof handleShareModulePeerLeave === 'function') handleShareModulePeerLeave(leftPeerId); 
+            if(typeof handleShareModulePeerLeave === 'function') handleShareModulePeerLeave(leftPeerId);
             if (window.mediaModuleRef && typeof cleanupMediaForPeer === 'function') cleanupMediaForPeer(leftPeerId);
         });
 
@@ -650,12 +658,12 @@ async function joinRoomAndSetup() {
         });
 
         showLoadingStatus("Finalizing workspace setup...");
-        
+
         if(setupSection) setupSection.classList.add('hidden');
         if(statusDiv) statusDiv.classList.add('hidden');
         if(inRoomInterface) inRoomInterface.classList.remove('hidden');
-        if(currentRoomCodeSpan) currentRoomCodeSpan.textContent = currentRoomId;
-        if(currentNicknameSpan) currentNicknameSpan.textContent = localNickname;
+        if(currentRoomCodeSpan) currentRoomCodeSpan.textContent = currentRoomId; // Room ID is generally safe, but escape if needed
+        if(currentNicknameSpan) currentNicknameSpan.textContent = escapeHtml(localNickname); // Escape nickname
 
         if (window.mediaModuleRef && window.mediaModuleRef.enableMediaButtons) window.mediaModuleRef.enableMediaButtons();
 
@@ -663,28 +671,28 @@ async function joinRoomAndSetup() {
         updateUserList();
         if(window.shareModuleRef && typeof setShareModulePeerInfo === 'function') setShareModulePeerInfo(peerNicknames);
 
-        if(window.shareModuleRef && window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`You joined workspace: ${currentRoomId} as ${localNickname}${isHost ? ' (Host)' : ''}.`);
+        if(window.shareModuleRef && window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`You joined workspace: ${currentRoomId} as ${escapeHtml(localNickname)}${isHost ? ' (Host)' : ''}.`);
 
         const shareModule = window.shareModuleRef;
-        if (shareModule) { 
+        if (shareModule) {
             if (currentActiveSection === 'whiteboardSection' && shareModule.resizeWhiteboardAndRedraw) {
                  shareModule.resizeWhiteboardAndRedraw();
-            } else if (shareModule.redrawWhiteboardFromHistoryIfVisible) { 
-                shareModule.redrawWhiteboardFromHistoryIfVisible(true); 
+            } else if (shareModule.redrawWhiteboardFromHistoryIfVisible) {
+                shareModule.redrawWhiteboardFromHistoryIfVisible(true);
             }
 
             if (currentActiveSection === 'kanbanSection' && shareModule.renderKanbanBoardIfActive) {
                 shareModule.renderKanbanBoardIfActive();
             } else if (shareModule.renderKanbanBoardIfActive) {
-                 shareModule.renderKanbanBoardIfActive(true); 
+                 shareModule.renderKanbanBoardIfActive(true);
             }
             if (currentActiveSection === 'documentsSection' && shareModule.renderDocumentsIfActive) {
                  shareModule.renderDocumentsIfActive();
             } else if (shareModule.renderDocumentsIfActive) {
-                shareModule.renderDocumentsIfActive(true); 
+                shareModule.renderDocumentsIfActive(true);
             }
         }
-        
+
         if (window.mediaModuleRef && window.mediaModuleRef.setLocalVideoFlip) {
             window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip);
         }
@@ -709,7 +717,7 @@ async function leaveRoomAndCleanup() {
     if (window.mediaModuleRef && typeof stopAllLocalMedia === 'function') await stopAllLocalMedia(false);
 
     if (roomApi) {
-        try { await roomApi.leave(); logStatus("Left workspace successfully."); } 
+        try { await roomApi.leave(); logStatus("Left workspace successfully."); }
         catch (e) { console.warn("Error leaving room:", e); }
     }
     roomApi = null;
@@ -721,8 +729,8 @@ async function leaveRoomAndCleanup() {
     sendInitialDocuments = onInitialDocuments = sendCreateDocument = onCreateDocument = null;
     sendRenameDocument = onRenameDocument = sendDeleteDocument = onDeleteDocument = null;
     sendDocumentContentUpdate = onDocumentContentUpdate = null;
-    sendCreateChannel = onCreateChannel = null; 
-    sendInitialChannels = onInitialChannels = null; 
+    sendCreateChannel = onCreateChannel = null;
+    sendInitialChannels = onInitialChannels = null;
 
     hideLoadingStatus();
     resetToSetupState();
@@ -745,10 +753,10 @@ function resetToSetupState() {
     if(joinPasswordInput) { joinPasswordInput.disabled = false; joinPasswordInput.value = ''; }
 
     if (window.mediaModuleRef && window.mediaModuleRef.resetMediaUIAndState) window.mediaModuleRef.resetMediaUIAndState();
- 
+
     if (window.shareModuleRef && typeof resetShareModuleStates === 'function') {
-        resetShareModuleStates(); 
-        if (window.shareModuleRef.hideEmojiPicker) window.shareModuleRef.hideEmojiPicker(); 
+        resetShareModuleStates();
+        if (window.shareModuleRef.hideEmojiPicker) window.shareModuleRef.hideEmojiPicker();
     }
 
     if(userListUl) userListUl.innerHTML = '';
@@ -760,7 +768,6 @@ function resetToSetupState() {
         if (btn.id !== 'exportWorkspaceBtnSidebar') btn.classList.remove('active');
         clearNotification(btn.dataset.section);
     });
-    // Ensure settings section is hidden initially too
     if (settingsSection) settingsSection.classList.add('hidden');
 
     contentSections.forEach(section => section.classList.add('hidden'));
@@ -775,10 +782,9 @@ function resetToSetupState() {
     peerNicknames = {};
     isHost = false;
     currentRoomId = '';
-    importedWorkspaceState = null; 
+    importedWorkspaceState = null;
 }
 
-// --- Event Listeners for Main Controls ---
 if (createPartyBtn) {
     createPartyBtn.addEventListener('click', () => {
         if (joinWorkspaceFields) joinWorkspaceFields.classList.add('hidden');
@@ -847,7 +853,7 @@ if (copyRoomCodeBtn) {
     });
 }
 
-localNickname = localStorage.getItem('viewPartyNickname') || ''; 
+localNickname = localStorage.getItem('viewPartyNickname') || '';
 if (nicknameInput) {
     nicknameInput.value = localNickname;
     nicknameInput.addEventListener('input', () => {
@@ -855,7 +861,6 @@ if (nicknameInput) {
     });
 }
 
-// Check browser capabilities
 if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
     console.warn("Screen sharing not supported by your browser.");
 }
@@ -863,7 +868,6 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     console.warn("Video/Audio capture not supported by your browser.");
 }
 
-// Initial state
 initTheme();
-loadSettings(); 
+loadSettings();
 resetToSetupState();
