@@ -1,6 +1,6 @@
 // main.js
 
-import { joinRoom, selfId as localGeneratedPeerId } from './trystero-torrent.min.js';
+import { joinRoom, selfId as localGeneratedPeerId } from './tryjero.js';
 import {
     initShareFeatures,
     getShareableData,
