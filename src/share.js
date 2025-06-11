@@ -1,0 +1,987 @@
+let chatHistory = [];
+let incomingFileBuffers = new Map();
+let channels = [];
+let currentActiveChannelId = null;
+
+
+import {
+    initKanbanFeatures,
+    getKanbanData,
+    loadKanbanData,
+    resetKanbanState,
+    handleKanbanUpdate as handleKanbanUpdateInternal,
+    handleInitialKanban as handleInitialKanbanInternal,
+    sendInitialKanbanStateToPeer,
+    renderKanbanBoardIfActive as renderKanbanBoardIfActiveInternal
+} from './kanban.js';
+
+import {
+    initWhiteboardFeatures,
+    getWhiteboardHistory,
+    loadWhiteboardData,
+    resetWhiteboardState,
+    handleDrawCommand as handleDrawCommandInternal,
+    handleInitialWhiteboard as handleInitialWhiteboardInternal,
+    sendInitialWhiteboardStateToPeer,
+    redrawWhiteboardFromHistoryIfVisible as redrawWhiteboardFromHistoryIfVisibleInternal,
+    resizeWhiteboardAndRedraw as resizeWhiteboardAndRedrawInternal
+} from './whiteboard.js';
+
+import {
+    initDocumentFeatures,
+    getDocumentShareData,
+    loadDocumentData,
+    resetDocumentState,
+    handleInitialDocuments as handleInitialDocumentsInternal,
+    handleCreateDocument as handleCreateDocumentInternal,
+    handleRenameDocument as handleRenameDocumentInternal,
+    handleDeleteDocument as handleDeleteDocumentInternal,
+    handleDocumentContentUpdate as handleDocumentContentUpdateInternal,
+    sendInitialDocumentsStateToPeer,
+    renderDocumentsIfActive as renderDocumentsIfActiveInternal,
+    ensureDefaultDocument as ensureDefaultDocumentInternal
+} from './document.js';
+
+let sendChatMessageDep, sendPrivateMessageDep, sendFileMetaDep, sendFileChunkDep;
+let sendDrawCommandDep, sendInitialWhiteboardDep, sendKanbanUpdateDep, sendInitialKanbanDep;
+let sendChatHistoryDep, sendInitialDocumentsDep, sendCreateDocumentDep, sendRenameDocumentDep;
+let sendDeleteDocumentDep, sendDocumentContentUpdateDep;
+let sendCreateChannelDep, onCreateChannelDep;
+let sendInitialChannelsDep, onInitialChannelsDep;
+
+
+let logStatusDep, showNotificationDep;
+let localGeneratedPeerIdDep;
+let getPeerNicknamesDep, getIsHostDep, getLocalNicknameDep, findPeerIdByNicknameDepFnc;
+let currentRoomIdDep;
+
+let chatArea, messageInput, sendMessageBtn, emojiIcon, emojiPickerPopup, triggerFileInput, chatFileInput;
+let channelListDiv, newChannelNameInput, addChannelBtn; // For channels
+
+let kanbanModuleRef, whiteboardModuleRef, documentModuleRef;
+
+const IMAGE_MIME_TYPES = [
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/avif',
+    'image/svg+xml'
+];
+const MIN_PREVIEW_DIM = 140;
+const MAX_PREVIEW_DIM = 240;
+
+async function generateImagePreview(file) {
+    return new Promise((resolve) => {
+        if (!IMAGE_MIME_TYPES.includes(file.type)) {
+            resolve(null);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                let newWidth, newHeight;
+                const originalWidth = img.width;
+                const originalHeight = img.height;
+                const aspectRatio = originalWidth / originalHeight;
+
+                if (originalWidth >= originalHeight) {
+                    newWidth = Math.min(MAX_PREVIEW_DIM, Math.max(MIN_PREVIEW_DIM, originalWidth));
+                    newHeight = newWidth / aspectRatio;
+
+                    if (newHeight < MIN_PREVIEW_DIM && originalHeight >= MIN_PREVIEW_DIM) {
+                        newHeight = MIN_PREVIEW_DIM;
+                        newWidth = newHeight * aspectRatio;
+                    } else if (newHeight > MAX_PREVIEW_DIM) {
+                        newHeight = MAX_PREVIEW_DIM;
+                        newWidth = newHeight * aspectRatio;
+                    }
+                } else {
+                    newHeight = Math.min(MAX_PREVIEW_DIM, Math.max(MIN_PREVIEW_DIM, originalHeight));
+                    newWidth = newHeight * aspectRatio;
+
+                    if (newWidth < MIN_PREVIEW_DIM && originalWidth >= MIN_PREVIEW_DIM) {
+                        newWidth = MIN_PREVIEW_DIM;
+                        newHeight = newWidth / aspectRatio;
+                    } else if (newWidth > MAX_PREVIEW_DIM) {
+                        newWidth = MAX_PREVIEW_DIM;
+                        newHeight = newWidth / aspectRatio;
+                    }
+                }
+
+                if (newWidth > MAX_PREVIEW_DIM) {
+                    newWidth = MAX_PREVIEW_DIM;
+                    newHeight = newWidth / aspectRatio;
+                }
+                if (newHeight > MAX_PREVIEW_DIM) {
+                    newHeight = MAX_PREVIEW_DIM;
+                    newWidth = newHeight * aspectRatio;
+                }
+                                
+                newWidth = Math.max(1, Math.round(Math.min(MAX_PREVIEW_DIM, newWidth)));
+                newHeight = Math.max(1, Math.round(Math.min(MAX_PREVIEW_DIM, newHeight)));
+
+
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+                ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+                let previewDataURL;
+                if (file.type === 'image/gif') {
+                    previewDataURL = canvas.toDataURL('image/png');
+                } else if (file.type === 'image/png' || file.type === 'image/svg+xml') {
+                     previewDataURL = canvas.toDataURL('image/png');
+                } else {
+                     previewDataURL = canvas.toDataURL('image/jpeg', 0.90);
+                }
+                resolve(previewDataURL);
+            };
+            img.onerror = () => {
+                console.warn("Failed to load image for preview generation:", file.name);
+                resolve(null);
+            };
+            img.src = e.target.result;
+        };
+        reader.onerror = () => {
+            console.warn("Failed to read file for preview generation:", file.name);
+            resolve(null);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+
+function selectChatDomElements() {
+    chatArea = document.getElementById('chatArea');
+    messageInput = document.getElementById('messageInput');
+    sendMessageBtn = document.getElementById('sendMessageBtn');
+    emojiIcon = document.querySelector('.emoji-icon');
+    emojiPickerPopup = document.getElementById('emojiPickerPopup');
+    triggerFileInput = document.getElementById('triggerFileInput');
+    chatFileInput = document.getElementById('chatFileInput');
+
+    channelListDiv = document.getElementById('channelList');
+    newChannelNameInput = document.getElementById('newChannelNameInput');
+    addChannelBtn = document.getElementById('addChannelBtn');
+}
+
+
+function debounce(func, delay) {
+    let timeout;
+    return function (...args) {
+        const context = this;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), delay);
+    };
+}
+
+export function initShareFeatures(dependencies) {
+    selectChatDomElements();
+
+
+    logStatusDep = dependencies.logStatus;
+    showNotificationDep = dependencies.showNotification;
+    localGeneratedPeerIdDep = dependencies.localGeneratedPeerId;
+    getPeerNicknamesDep = dependencies.getPeerNicknames;
+    getIsHostDep = dependencies.getIsHost;
+    getLocalNicknameDep = dependencies.getLocalNickname;
+    findPeerIdByNicknameDepFnc = dependencies.findPeerIdByNicknameFnc;
+    currentRoomIdDep = dependencies.currentRoomId;
+
+    
+    sendChatMessageDep = dependencies.sendChatMessage;
+    sendPrivateMessageDep = dependencies.sendPrivateMessage;
+    sendFileMetaDep = dependencies.sendFileMeta;
+    sendFileChunkDep = dependencies.sendFileChunk;
+    sendChatHistoryDep = dependencies.sendChatHistory;
+    sendCreateChannelDep = dependencies.sendCreateChannel;
+    sendInitialChannelsDep = dependencies.sendInitialChannels;
+    sendDrawCommandDep = dependencies.sendDrawCommand;
+    sendInitialWhiteboardDep = dependencies.sendInitialWhiteboard;
+    sendKanbanUpdateDep = dependencies.sendKanbanUpdate;
+    sendInitialKanbanDep = dependencies.sendInitialKanban;
+    sendInitialDocumentsDep = dependencies.sendInitialDocuments;
+    sendCreateDocumentDep = dependencies.sendCreateDocument;
+    sendRenameDocumentDep = dependencies.sendRenameDocument;
+    sendDeleteDocumentDep = dependencies.sendDeleteDocument;
+    sendDocumentContentUpdateDep = dependencies.sendDocumentContentUpdate;
+
+    const commonSubModuleDeps = {
+        logStatus: logStatusDep,
+        showNotification: showNotificationDep,
+        getPeerNicknames: getPeerNicknamesDep,
+        localGeneratedPeerId: localGeneratedPeerIdDep,
+        getIsHost: getIsHostDep,
+    };
+
+    kanbanModuleRef = initKanbanFeatures({
+        ...commonSubModuleDeps,
+        sendKanbanUpdate: sendKanbanUpdateDep,
+        sendInitialKanban: sendInitialKanbanDep,
+            });
+
+    whiteboardModuleRef = initWhiteboardFeatures({
+        ...commonSubModuleDeps,
+        sendDrawCommand: sendDrawCommandDep,
+        sendInitialWhiteboard: sendInitialWhiteboardDep,
+    });
+
+    documentModuleRef = initDocumentFeatures({
+        ...commonSubModuleDeps,
+        sendInitialDocuments: sendInitialDocumentsDep,
+        sendCreateDocument: sendCreateDocumentDep,
+        sendRenameDocument: sendRenameDocumentDep,
+        sendDeleteDocument: sendDeleteDocumentDep,
+        sendDocumentContentUpdate: sendDocumentContentUpdateDep,
+    });
+    
+    initChat();
+    
+    const importedState = dependencies.getImportedWorkspaceState();
+    if (importedState && getIsHostDep && getIsHostDep()) {
+        loadChatHistoryFromImport(importedState.chatHistory || []);
+        if (importedState.channels) {
+            channels = importedState.channels;
+            currentActiveChannelId = importedState.currentActiveChannelIdForImport || (channels.length > 0 ? channels[0].id : null);
+        }
+        if (whiteboardModuleRef) whiteboardModuleRef.loadWhiteboardData(importedState.whiteboardHistory || []);
+        if (kanbanModuleRef) kanbanModuleRef.loadKanbanData(importedState.kanbanData || { columns: [] });
+        if (documentModuleRef) documentModuleRef.loadDocumentData(importedState.documents || [], importedState.currentActiveDocumentId);
+        
+        if(dependencies.clearImportedWorkspaceState) dependencies.clearImportedWorkspaceState();
+    }
+    
+    if (getIsHostDep && getIsHostDep()) {
+        const generalChannelExists = channels.some(ch => ch.name === "#general");
+        if (!generalChannelExists) {
+            _createAndBroadcastChannel("#general", channels.length === 0); 
+        }
+        if (documentModuleRef) documentModuleRef.ensureDefaultDocument();
+    } else {
+        if (channels.length > 0 && !currentActiveChannelId) {
+            setActiveChannel(channels[0].id, false);
+        }
+    }
+
+
+    renderChannelList();
+    displayChatForCurrentChannel();
+
+    return { 
+      
+        handleChatMessage, handlePrivateMessage, handleFileMeta, handleFileChunk,
+        handleChatHistory, 
+        handleCreateChannel, handleInitialChannels, 
+
+        
+        handleDrawCommand: (data, peerId) => whiteboardModuleRef.handleDrawCommand(data, peerId),
+        handleInitialWhiteboard: (data, peerId) => whiteboardModuleRef.handleInitialWhiteboard(data, peerId, getIsHostDep),
+        handleKanbanUpdate: (data, peerId) => kanbanModuleRef.handleKanbanUpdate(data, peerId, localGeneratedPeerIdDep),
+        handleInitialKanban: (data, peerId) => kanbanModuleRef.handleInitialKanban(data, peerId, getIsHostDep, localGeneratedPeerIdDep),
+        handleInitialDocuments: (data, peerId) => documentModuleRef.handleInitialDocuments(data, peerId),
+        handleCreateDocument: (data, peerId) => documentModuleRef.handleCreateDocument(data, peerId),
+        handleRenameDocument: (data, peerId) => documentModuleRef.handleRenameDocument(data, peerId),
+        handleDeleteDocument: (data, peerId) => documentModuleRef.handleDeleteDocument(data, peerId),
+        handleDocumentContentUpdate: (data, peerId) => documentModuleRef.handleDocumentContentUpdate(data, peerId),
+
+        redrawWhiteboardFromHistoryIfVisible: (force) => whiteboardModuleRef.redrawWhiteboardFromHistoryIfVisible(force),
+        resizeWhiteboardAndRedraw: () => whiteboardModuleRef.resizeWhiteboardAndRedraw(),
+        renderKanbanBoardIfActive: (force) => kanbanModuleRef.renderKanbanBoardIfActive(force),
+        renderDocumentsIfActive: (force) => documentModuleRef.renderDocumentsIfActive(force),
+        ensureDefaultDocument: () => documentModuleRef.ensureDefaultDocument(), 
+
+        sendFullStateToPeer,
+        displaySystemMessage,
+        updateChatMessageInputPlaceholder,
+        primePrivateMessage,
+        hideEmojiPicker,
+        initializeEmojiPicker,
+        setShareModulePeerInfo, 
+        handleShareModulePeerLeave 
+    };
+}
+
+export function setShareModulePeerInfo(peerNicknames) {
+  
+}
+
+export function handleShareModulePeerLeave(peerId) {
+    const keysToDelete = [];
+    for (const [key, value] of incomingFileBuffers.entries()) {
+        if (key.startsWith(`${peerId}_`)) {
+            const peerNickname = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : peerId.substring(0,6);
+            if(logStatusDep) logStatusDep(`File transfer for ${value.meta.name} from departing peer ${peerNickname} cancelled.`);
+            
+            const safeSenderNickname = peerNickname.replace(/\W/g, '');
+            const safeFileName = value.meta.name.replace(/\W/g, '');
+            const progressId = `file-progress-${safeSenderNickname}-${safeFileName}`;
+            const progressElem = document.getElementById(progressId);
+            if (progressElem) progressElem.textContent = ` (Cancelled)`;
+            keysToDelete.push(key);
+        }
+    }
+    keysToDelete.forEach(key => incomingFileBuffers.delete(key));
+
+  
+}
+
+
+function initChat() {
+    if (!sendMessageBtn || !messageInput || !triggerFileInput || !chatFileInput || !emojiIcon || !emojiPickerPopup) return;
+    if (!addChannelBtn || !newChannelNameInput || !channelListDiv) return; 
+
+    sendMessageBtn.addEventListener('click', handleSendMessage);
+    messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSendMessage(); });
+
+    triggerFileInput.addEventListener('click', () => chatFileInput.click());
+    chatFileInput.addEventListener('change', handleChatFileSelected);
+
+    emojiIcon.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const isHidden = emojiPickerPopup.classList.toggle('hidden');
+        if (!isHidden && emojiPickerPopup.children.length === 0) {
+            populateEmojiPicker();
+        }
+        messageInput.focus();
+    });
+    document.addEventListener('click', (event) => {
+        if (emojiPickerPopup && !emojiPickerPopup.classList.contains('hidden') && !emojiPickerPopup.contains(event.target) && event.target !== emojiIcon) {
+            emojiPickerPopup.classList.add('hidden');
+        }
+    });
+    if (emojiPickerPopup) {
+        emojiPickerPopup.addEventListener('mouseleave', () => {
+            emojiPickerPopup.classList.add('hidden');
+        });
+    }
+    addChannelBtn.addEventListener('click', handleAddChannelUI);
+}
+
+export function initializeEmojiPicker() {
+    if(emojiPickerPopup && emojiPickerPopup.children.length === 0) populateEmojiPicker();
+}
+
+function populateEmojiPicker() {
+    if (!emojiPickerPopup) return;
+    emojiPickerPopup.innerHTML = '';
+    const emojis = ['😊', '😂', '❤️', '👍', '🙏', '🎉', '🔥', '👋', '✅', '🤔', '😢', '😮', '😭', '😍', '💯', '🌟', '✨', '🎁', '🎈', '🎂', '🍕', '🚀', '💡', '🤷', '🤦'];
+    emojis.forEach(emoji => {
+        const emojiSpan = document.createElement('span');
+        emojiSpan.textContent = emoji;
+        emojiSpan.setAttribute('role', 'button');
+        emojiSpan.title = `Insert ${emoji}`;
+        emojiSpan.addEventListener('click', () => {
+            insertEmojiIntoInput(emoji);
+            emojiPickerPopup.classList.add('hidden');
+        });
+        emojiPickerPopup.appendChild(emojiSpan);
+    });
+}
+
+function insertEmojiIntoInput(emoji) {
+    if (!messageInput) return;
+    const cursorPos = messageInput.selectionStart;
+    const textBefore = messageInput.value.substring(0, cursorPos);
+    const textAfter = messageInput.value.substring(cursorPos);
+    messageInput.value = textBefore + emoji + textAfter;
+    messageInput.focus();
+    const newCursorPos = cursorPos + emoji.length;
+    messageInput.setSelectionRange(newCursorPos, newCursorPos);
+}
+
+export function hideEmojiPicker() {
+    if(emojiPickerPopup) emojiPickerPopup.classList.add('hidden');
+}
+
+function _createAndBroadcastChannel(channelName, isDefault = false) {
+    if (!channelName || !channelName.trim()) return null;
+
+    let userProvidedName = channelName.trim();
+    if (userProvidedName.startsWith('#')) {
+        userProvidedName = userProvidedName.substring(1);
+    }
+
+    if (userProvidedName.length > 16) {
+        if(logStatusDep && !isDefault) logStatusDep(`Channel name "${userProvidedName}" is too long. Maximum 16 characters.`, true);
+        return null;
+    }
+    
+    let saneChannelName = channelName.trim();
+    if (!saneChannelName.startsWith('#')) {
+        saneChannelName = '#' + saneChannelName;
+    }
+    saneChannelName = saneChannelName.replace(/\s+/g, '-').toLowerCase(); 
+
+    if (channels.find(ch => ch.name === saneChannelName)) {
+        if(logStatusDep && !isDefault) {
+            const wasIntentionalCreation = newChannelNameInput && newChannelNameInput.value.trim().toLowerCase().includes(userProvidedName.toLowerCase());
+            if (wasIntentionalCreation) {
+                 logStatusDep(`Channel "${saneChannelName}" already exists.`, true);
+            }
+        }
+        return channels.find(ch => ch.name === saneChannelName);
+    }
+
+    const newChannel = { id: `ch-${Date.now()}-${Math.random().toString(36).substring(2,5)}`, name: saneChannelName };
+    channels.push(newChannel);
+    
+    if (sendCreateChannelDep) {
+        sendCreateChannelDep(newChannel); 
+    }
+    if (isDefault || channels.length === 1) { 
+        setActiveChannel(newChannel.id, false);
+    }
+    renderChannelList();
+    return newChannel;
+}
+
+
+function handleAddChannelUI() {
+    if (!newChannelNameInput) return;
+    const channelName = newChannelNameInput.value;
+    const createdChannel = _createAndBroadcastChannel(channelName);
+    if (createdChannel) {
+        newChannelNameInput.value = '';
+        if(logStatusDep && !channels.find(ch => ch.id === createdChannel.id && ch.name === createdChannel.name && channels.indexOf(ch) < channels.length -1 )) {
+            logStatusDep(`Channel "${createdChannel.name}" created.`);
+        }
+    }
+}
+
+function renderChannelList() {
+    if (!channelListDiv) return;
+    channelListDiv.innerHTML = '';
+    channels.forEach(channel => {
+        const channelItem = document.createElement('div');
+        channelItem.classList.add('channel-list-item');
+        channelItem.textContent = channel.name;
+        channelItem.dataset.channelId = channel.id;
+        if (channel.id === currentActiveChannelId) {
+            channelItem.classList.add('active');
+        }
+        channelItem.addEventListener('click', () => setActiveChannel(channel.id));
+
+        const notifDot = document.createElement('span');
+        notifDot.classList.add('channel-notification-dot', 'hidden'); 
+        channelItem.appendChild(notifDot);
+
+        channelListDiv.appendChild(channelItem);
+    });
+}
+
+function setActiveChannel(channelId, clearNotifications = true) {
+    if (currentActiveChannelId === channelId && !clearNotifications) {
+        renderChannelList(); 
+        return;
+    }
+    currentActiveChannelId = channelId;
+    renderChannelList(); 
+    displayChatForCurrentChannel();
+
+    if (clearNotifications && channelListDiv) { 
+        const channelDot = channelListDiv.querySelector(`.channel-list-item[data-channel-id="${channelId}"] .channel-notification-dot`);
+        if (channelDot) {
+            channelDot.classList.add('hidden');
+        }
+    }
+    if(messageInput) { 
+        const activeChannel = channels.find(c=>c.id === channelId);
+        messageInput.placeholder = `Message ${activeChannel?.name || (currentRoomIdDep || '')}`;
+    }
+}
+
+function displayChatForCurrentChannel() {
+    if (!chatArea) return;
+    chatArea.innerHTML = '';
+    
+    const messagesForChannel = chatHistory.filter(msg => {
+        if (msg.isSystem || msg.pmInfo || msg.fileMeta) {
+            return true;
+        }
+        return msg.channelId === currentActiveChannelId;
+    });
+
+    messagesForChannel.forEach(msg => {
+        displayMessage(msg, msg.senderPeerId === localGeneratedPeerIdDep, msg.isSystem);
+    });
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+
+function displayMessage(msgObject, isSelf = false, isSystem = false) {
+    if (!chatArea) return;
+    const { senderNickname, message, pmInfo, fileMeta, timestamp } = msgObject;
+    const messageDiv = document.createElement('div'); messageDiv.classList.add('message');
+    const displayTimestamp = timestamp ? new Date(timestamp) : new Date();
+    const hours = String(displayTimestamp.getHours()).padStart(2, '0');
+    const minutes = String(displayTimestamp.getMinutes()).padStart(2, '0');
+    const timestampStr = `${hours}:${minutes}`;
+    const timestampSpan = document.createElement('span'); timestampSpan.classList.add('timestamp'); timestampSpan.textContent = timestampStr;
+
+    if (isSystem) {
+        messageDiv.classList.add('system-message');
+        messageDiv.appendChild(document.createTextNode(message + " "));
+    } else if (pmInfo) {
+        messageDiv.classList.add('pm');
+        messageDiv.classList.add(isSelf ? 'self' : 'other');
+        const pmContextSpan = document.createElement('span');
+        pmContextSpan.classList.add('pm-info');
+        pmContextSpan.textContent = pmInfo.type === 'sent' ? `To ${pmInfo.recipient}:` : `From ${pmInfo.sender}:`;
+        messageDiv.appendChild(pmContextSpan);
+        messageDiv.appendChild(document.createTextNode(message + " "));
+    } else if (fileMeta) {
+        messageDiv.classList.add(isSelf ? 'self' : 'other');
+        messageDiv.classList.add('file-message');
+        
+        const senderSpan = document.createElement('span'); senderSpan.classList.add('sender');
+        senderSpan.textContent = isSelf ? 'You' : senderNickname;
+        messageDiv.appendChild(senderSpan);
+
+        const fileInfoContainer = document.createElement('div');
+        fileInfoContainer.classList.add('file-info-container');
+
+        const previewLink = document.createElement('a'); 
+        previewLink.classList.add('chat-file-preview-link');
+        previewLink.title = `Click to download ${fileMeta.name}`; 
+        if (fileMeta.blobUrl) {
+            previewLink.href = fileMeta.blobUrl;
+            previewLink.download = fileMeta.name;
+        } else {
+            previewLink.href = "#"; 
+            previewLink.onclick = (e) => e.preventDefault(); 
+        }
+
+        if (fileMeta.previewDataURL) {
+            const previewImg = document.createElement('img');
+            previewImg.src = fileMeta.previewDataURL;
+            previewImg.alt = `Preview of ${fileMeta.name}`;
+            previewImg.classList.add('chat-file-preview');
+            previewLink.appendChild(previewImg); 
+            fileInfoContainer.appendChild(previewLink);
+        }
+
+        const fileTextInfoSpan = document.createElement('span');
+        fileTextInfoSpan.classList.add('file-text-info');
+        const fileNameStrong = document.createElement('strong');
+        fileNameStrong.textContent = fileMeta.name;
+        const fileSizeSpan = document.createTextNode(` (${(fileMeta.size / 1024).toFixed(2)} KB) `);
+        
+        fileTextInfoSpan.appendChild(document.createTextNode("Shared: "));
+        fileTextInfoSpan.appendChild(fileNameStrong);
+        fileTextInfoSpan.appendChild(fileSizeSpan);
+        
+        if (!fileMeta.previewDataURL && fileMeta.blobUrl) { 
+            const downloadLink = document.createElement('a');
+            downloadLink.href = fileMeta.blobUrl;
+            downloadLink.download = fileMeta.name;
+            downloadLink.textContent = 'Download';
+            fileTextInfoSpan.appendChild(downloadLink);
+        } else if (fileMeta.receiving || (!fileMeta.blobUrl && !isSelf)) {
+            const progressSpan = document.createElement('span');
+            const safeSName = (isSelf ? (getLocalNicknameDep ? getLocalNicknameDep() : 'You') : senderNickname).replace(/\W/g, '');
+            const safeFName = fileMeta.name.replace(/\W/g, '');
+            progressSpan.id = `file-progress-${safeSName}-${safeFName}`;
+            
+            let initialProgressText = "";
+            if (isSelf && fileMeta.receiving) initialProgressText = ` (Sending 0%)`;
+            else if (!isSelf && !fileMeta.blobUrl) initialProgressText = ` (Receiving 0%)`;
+            
+            progressSpan.textContent = initialProgressText;
+            if(initialProgressText) fileTextInfoSpan.appendChild(progressSpan);
+        } else if (isSelf && !fileMeta.receiving && fileMeta.blobUrl && !fileMeta.previewDataURL) { 
+             const sentSpan = document.createElement('span');
+             sentSpan.textContent = " (Sent)";
+             fileTextInfoSpan.appendChild(sentSpan);
+        }
+
+        fileInfoContainer.appendChild(fileTextInfoSpan);
+        messageDiv.appendChild(fileInfoContainer);
+
+    } else { 
+        messageDiv.classList.add(isSelf ? 'self' : 'other');
+        const senderSpan = document.createElement('span'); senderSpan.classList.add('sender');
+        senderSpan.textContent = isSelf ? 'You' : senderNickname;
+        messageDiv.appendChild(senderSpan);
+        messageDiv.appendChild(document.createTextNode(message + " "));
+    }
+
+    messageDiv.appendChild(timestampSpan);
+    chatArea.appendChild(messageDiv);
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function addMessageToHistoryAndDisplay(msgData, isSelf = false, isSystem = false) {
+    let channelIdForMsg = msgData.channelId;
+    
+    if (isSelf && !isSystem && !msgData.pmInfo && !msgData.fileMeta && !channelIdForMsg) {
+        channelIdForMsg = currentActiveChannelId;
+    }
+
+    const fullMsgObject = {
+        ...msgData,
+        channelId: (msgData.isSystem || msgData.pmInfo || msgData.fileMeta) ? null : channelIdForMsg, 
+        timestamp: msgData.timestamp || Date.now(),
+        senderPeerId: isSelf ? localGeneratedPeerIdDep : msgData.senderPeerId,
+        isSystem: isSystem
+    };
+    chatHistory.push(fullMsgObject);
+    if ( fullMsgObject.isSystem || fullMsgObject.pmInfo || fullMsgObject.fileMeta || (fullMsgObject.channelId && fullMsgObject.channelId === currentActiveChannelId) ) {
+        displayMessage(fullMsgObject, isSelf, isSystem);
+    }
+}
+
+function handleSendMessage() {
+    const messageText = messageInput.value.trim();
+    if (!messageText || !sendChatMessageDep) return;
+    const timestamp = Date.now();
+    const localCurrentNickname = getLocalNicknameDep ? getLocalNicknameDep() : 'You';
+
+    if (messageText.toLowerCase().startsWith('/pm ')) {
+         const parts = messageText.substring(4).split(' ');
+        const targetNickname = parts.shift();
+        const pmContent = parts.join(' ').trim();
+        if (!targetNickname || !pmContent) {
+            addMessageToHistoryAndDisplay({ message: "Usage: /pm <nickname> <message>", timestamp }, false, true); return;
+        }
+        if (targetNickname.toLowerCase() === localCurrentNickname.toLowerCase()) {
+            addMessageToHistoryAndDisplay({ message: "You can't PM yourself.", timestamp }, false, true); return;
+        }
+        const targetPeerId = findPeerIdByNicknameDepFnc ? findPeerIdByNicknameDepFnc(targetNickname) : null;
+        if (targetPeerId && sendPrivateMessageDep) {
+            sendPrivateMessageDep({ content: pmContent, timestamp }, targetPeerId);
+          
+            addMessageToHistoryAndDisplay({ senderNickname: localCurrentNickname, message: pmContent, pmInfo: { type: 'sent', recipient: targetNickname }, timestamp }, true);
+        } else {
+            addMessageToHistoryAndDisplay({ message: `User "${targetNickname}" not found or PM failed.`, timestamp }, false, true);
+        }
+    } else { 
+        if (!currentActiveChannelId) {
+            addMessageToHistoryAndDisplay({ message: "Please select a channel to send a message.", timestamp }, false, true);
+            return;
+        }
+        const msgData = { message: messageText, timestamp, channelId: currentActiveChannelId };
+        sendChatMessageDep(msgData);
+        addMessageToHistoryAndDisplay({ senderNickname: localCurrentNickname, ...msgData }, true);
+    }
+    messageInput.value = '';
+    if (emojiPickerPopup && !emojiPickerPopup.classList.contains('hidden')) emojiPickerPopup.classList.add('hidden');
+}
+
+async function handleChatFileSelected(event) {
+    const file = event.target.files[0];
+    if (!file || !sendFileMetaDep || !sendFileChunkDep) return;
+    const localCurrentNickname = getLocalNicknameDep ? getLocalNicknameDep() : 'You';
+
+    if(logStatusDep) logStatusDep(`Preparing to send file: ${file.name}`);
+    
+    const previewDataURL = await generateImagePreview(file);
+
+    const fileMeta = { 
+        name: file.name, 
+        type: file.type, 
+        size: file.size, 
+        id: Date.now().toString(),
+        previewDataURL: previewDataURL 
+    };
+ 
+    addMessageToHistoryAndDisplay({ 
+        senderNickname: localCurrentNickname, 
+        fileMeta: { ...fileMeta, receiving: true, blobUrl: URL.createObjectURL(file) }, 
+        timestamp: Date.now() 
+    }, true);
+    
+    sendFileMetaDep(fileMeta); 
+
+    const CHUNK_SIZE = 16 * 1024;
+    let offset = 0;
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+        const chunkData = e.target.result;
+        const isFinal = (offset + chunkData.byteLength) >= file.size;
+        sendFileChunkDep(chunkData, null, { fileName: fileMeta.name, fileId: fileMeta.id, final: isFinal });
+        
+        const safeLocalNickname = localCurrentNickname.replace(/\W/g, '');
+        const safeFileName = fileMeta.name.replace(/\W/g, '');
+        const progressId = `file-progress-${safeLocalNickname}-${safeFileName}`;
+
+        const progressElem = document.getElementById(progressId);
+        if (progressElem) {
+            progressElem.textContent = ` (Sending ${Math.min(100, Math.round(((offset + chunkData.byteLength) / file.size) * 100))}%)`;
+        }
+
+        if (!isFinal) {
+            offset += chunkData.byteLength;
+            readNextChunk();
+        } else {
+            if(logStatusDep) logStatusDep(`File ${file.name} sent.`);
+            const localMsgEntry = chatHistory.find(
+                msg => msg.senderPeerId === localGeneratedPeerIdDep && 
+                       msg.fileMeta && 
+                       msg.fileMeta.id === fileMeta.id
+            );
+            if (localMsgEntry && localMsgEntry.fileMeta) {
+                delete localMsgEntry.fileMeta.receiving; 
+                if (progressElem) progressElem.textContent = ` (Sent 100%)`;
+            }
+        }
+    };
+    reader.onerror = (error) => {
+        if(logStatusDep) logStatusDep(`Error reading file: ${error}`, true);
+        const safeLocalNickname = localCurrentNickname.replace(/\W/g, '');
+        const safeFileName = fileMeta.name.replace(/\W/g, '');
+        const progressId = `file-progress-${safeLocalNickname}-${safeFileName}`;
+        const progressElem = document.getElementById(progressId);
+        if (progressElem) progressElem.textContent = ` (Error sending)`;
+    };
+    function readNextChunk() {
+        const slice = file.slice(offset, offset + CHUNK_SIZE);
+        reader.readAsArrayBuffer(slice);
+    }
+    readNextChunk();
+    chatFileInput.value = '';
+}
+
+export function handleChatMessage(msgData, peerId) {
+    const senderNickname = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : `Peer ${peerId.substring(0, 6)}`;
+    const fullMsgObject = { ...msgData, senderNickname, senderPeerId: peerId, timestamp: msgData.timestamp || Date.now() };
+    
+    chatHistory.push(fullMsgObject); 
+    if (fullMsgObject.channelId === currentActiveChannelId) {
+        displayMessage(fullMsgObject, false);
+    } else if (fullMsgObject.channelId && channelListDiv) {
+        const channelDot = channelListDiv.querySelector(`.channel-list-item[data-channel-id="${fullMsgObject.channelId}"] .channel-notification-dot`);
+        if (channelDot) {
+            channelDot.classList.remove('hidden');
+        }
+    }
+    if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('chatSection');
+}
+export function handlePrivateMessage(pmData, senderPeerId) {
+    const sender = (getPeerNicknamesDep && getPeerNicknamesDep()[senderPeerId]) ? getPeerNicknamesDep()[senderPeerId] : `Peer ${senderPeerId.substring(0, 6)}`;
+    addMessageToHistoryAndDisplay({ senderNickname: sender, message: pmData.content, pmInfo: { type: 'received', sender: sender }, senderPeerId: senderPeerId, timestamp: pmData.timestamp || Date.now() }, false);
+    if (senderPeerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('chatSection'); 
+}
+export function handleFileMeta(meta, peerId) {
+    const senderNickname = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : `Peer ${peerId.substring(0, 6)}`;
+    const bufferKey = `${peerId}_${meta.id}`;
+    incomingFileBuffers.set(bufferKey, { meta, chunks: [], receivedBytes: 0 });
+    
+    addMessageToHistoryAndDisplay({ 
+        senderNickname, 
+        fileMeta: { ...meta, receiving: true }, 
+        senderPeerId: peerId, 
+        timestamp: Date.now() 
+    }, false);
+
+    if(logStatusDep) logStatusDep(`${senderNickname} is sending file: ${meta.name}`);
+    if (peerId !== localGeneratedPeerIdDep && showNotificationDep) showNotificationDep('chatSection');
+}
+export function handleFileChunk(chunk, peerId, chunkMeta) {
+    const senderNickname = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : `Peer ${peerId.substring(0, 6)}`;
+    const bufferKey = `${peerId}_${chunkMeta.fileId}`;
+    const fileBuffer = incomingFileBuffers.get(bufferKey);
+
+    if (fileBuffer) {
+        fileBuffer.chunks.push(chunk);
+        fileBuffer.receivedBytes += chunk.byteLength;
+        const progress = Math.round((fileBuffer.receivedBytes / fileBuffer.meta.size) * 100);
+
+        const safeSenderNickname = senderNickname.replace(/\W/g, '');
+        const safeFileName = fileBuffer.meta.name.replace(/\W/g, '');
+        const progressId = `file-progress-${safeSenderNickname}-${safeFileName}`;
+        const progressElem = document.getElementById(progressId);
+        if (progressElem) progressElem.textContent = ` (Receiving ${progress}%)`;
+
+        if (chunkMeta.final || fileBuffer.receivedBytes >= fileBuffer.meta.size) {
+            const completeFile = new Blob(fileBuffer.chunks, { type: fileBuffer.meta.type });
+            const blobUrl = URL.createObjectURL(completeFile);
+
+            const msgToUpdate = chatHistory.find(msg => 
+                msg.senderPeerId === peerId && 
+                msg.fileMeta && 
+                msg.fileMeta.id === fileBuffer.meta.id
+            );
+            if (msgToUpdate && msgToUpdate.fileMeta) {
+                msgToUpdate.fileMeta.blobUrl = blobUrl;
+                delete msgToUpdate.fileMeta.receiving;
+            }
+
+            if (chatArea) {
+                chatArea.querySelectorAll('.message.other.file-message').forEach(msgDiv => {
+                    const senderSpan = msgDiv.querySelector('.sender');
+                    const fileNameStrong = msgDiv.querySelector('.file-text-info strong');
+                    
+                    if (senderSpan && senderSpan.textContent === senderNickname && 
+                        fileNameStrong && fileNameStrong.textContent === fileBuffer.meta.name) {
+                        
+                        const existingProgress = msgDiv.querySelector(`#${progressId}`);
+                        if (existingProgress) existingProgress.remove();
+                        
+                        const previewLinkElement = msgDiv.querySelector('a.chat-file-preview-link');
+                        if (previewLinkElement) {
+                            previewLinkElement.href = blobUrl;
+                            previewLinkElement.download = fileBuffer.meta.name;
+                            previewLinkElement.onclick = null; 
+                            previewLinkElement.title = `Download ${fileBuffer.meta.name}`;
+                        } else { 
+                            const fileTextInfo = msgDiv.querySelector('.file-text-info');
+                            if(fileTextInfo && !fileTextInfo.querySelector('a')) { 
+                                const downloadLink = document.createElement('a');
+                                downloadLink.href = blobUrl;
+                                downloadLink.download = fileBuffer.meta.name;
+                                downloadLink.textContent = 'Download';
+                                fileTextInfo.appendChild(document.createTextNode(" "));
+                                fileTextInfo.appendChild(downloadLink);
+                            }
+                        }
+                    }
+                });
+            }
+            if(logStatusDep) logStatusDep(`File ${fileBuffer.meta.name} from ${senderNickname} received.`);
+            incomingFileBuffers.delete(bufferKey);
+        }
+    } else {
+        console.warn(`Received chunk for unknown file: ${chunkMeta.fileName} from ${senderNickname}`);
+    }
+}
+export function handleChatHistory(history, peerId) {
+    if (getIsHostDep && !getIsHostDep()) {
+        chatHistory = history;
+        chatHistory.forEach(msg => {
+            if (msg.isSystem === undefined && (msg.message?.includes("joined") || msg.message?.includes("left") || msg.message?.startsWith("Error:") || msg.message?.includes("now known as") || msg.message?.includes("You joined workspace:") )) {
+                msg.isSystem = true;
+            }
+        });
+        if (currentActiveChannelId) {
+            displayChatForCurrentChannel();
+        }
+        if(logStatusDep) logStatusDep(`Received chat history from ${(getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : 'host'}.`);
+    }
+}
+export function updateChatMessageInputPlaceholder() {
+    if(messageInput) {
+        const activeChannel = channels.find(c => c.id === currentActiveChannelId);
+        messageInput.placeholder = `Message ${activeChannel?.name || (currentRoomIdDep || 'current channel')}`;
+    }
+}
+export function primePrivateMessage(nickname) {
+    if (messageInput) {
+        messageInput.value = `/pm ${nickname} `;
+        messageInput.focus();
+    }
+}
+
+export function handleCreateChannel(newChannelData, peerId) {
+    if (!channels.find(ch => ch.id === newChannelData.id)) {
+        channels.push(newChannelData);
+        renderChannelList();
+        if (peerId !== localGeneratedPeerIdDep && logStatusDep) {
+            const senderName = (getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : 'another user';
+            logStatusDep(`Channel "${newChannelData.name}" created by ${senderName}.`);
+        }
+        if (!currentActiveChannelId && channels.length === 1) {
+            setActiveChannel(newChannelData.id, false);
+        }
+    }
+}
+
+export function handleInitialChannels(receivedChannels, peerId) {
+    if (getIsHostDep && !getIsHostDep()) {
+        channels = receivedChannels || [];
+        
+        const generalChannelExists = channels.some(ch => ch.name === "#general");
+        if (!generalChannelExists) {
+             _createAndBroadcastChannel("#general", channels.length === 0);
+        }
+
+        if (channels.length > 0 && (!currentActiveChannelId || !channels.find(c => c.id === currentActiveChannelId))) {
+            currentActiveChannelId = channels[0].id;
+        }
+        
+        renderChannelList();
+        if (chatHistory.length > 0) {
+             displayChatForCurrentChannel();
+        }
+        if(logStatusDep) logStatusDep(`Received channel list from ${(getPeerNicknamesDep && getPeerNicknamesDep()[peerId]) ? getPeerNicknamesDep()[peerId] : 'host'}.`);
+    }
+}
+
+export function getShareableData() {
+    if (documentModuleRef) documentModuleRef.getDocumentShareData();
+
+    return { 
+        chatHistory, 
+        channels, 
+        currentActiveChannelIdForImport: currentActiveChannelId,
+        whiteboardHistory: whiteboardModuleRef ? whiteboardModuleRef.getWhiteboardHistory() : [], 
+        kanbanData: kanbanModuleRef ? kanbanModuleRef.getKanbanData() : { columns: [] }, 
+        documents: documentModuleRef ? documentModuleRef.getDocumentShareData().docs : [], 
+        currentActiveDocumentId: documentModuleRef ? documentModuleRef.getDocumentShareData().activeId : null,
+    };
+}
+export function loadShareableData(data) { 
+    chatHistory = data.chatHistory || [];
+    chatHistory.forEach(msg => {
+        if (msg.isSystem === undefined && (msg.message?.includes("joined") || msg.message?.includes("left") || msg.message?.startsWith("Error:") || msg.message?.includes("now known as") || msg.message?.includes("You joined workspace:") )) {
+            msg.isSystem = true;
+        }
+    });
+
+    channels = data.channels || [];
+    currentActiveChannelId = data.currentActiveChannelIdForImport || (channels.length > 0 ? channels[0].id : null);
+
+    if (whiteboardModuleRef) whiteboardModuleRef.loadWhiteboardData(data.whiteboardHistory || []);
+    if (kanbanModuleRef) kanbanModuleRef.loadKanbanData(data.kanbanData || { columns: [] });
+    if (documentModuleRef) documentModuleRef.loadDocumentData(data.documents || [], data.currentActiveDocumentId);
+   
+    renderChannelList();
+    displayChatForCurrentChannel();
+   
+}
+function loadChatHistoryFromImport(importedHistory) { 
+    chatHistory = importedHistory; 
+    chatHistory.forEach(msg => {
+        if (msg.isSystem === undefined && (msg.message?.includes("joined") || msg.message?.includes("left") || msg.message?.startsWith("Error:") || msg.message?.includes("now known as") || msg.message?.includes("You joined workspace:") )) {
+            msg.isSystem = true;
+        }
+    });
+}
+
+
+export function sendFullStateToPeer(peerId) {
+    if (getIsHostDep && getIsHostDep()) {
+      
+        if (sendInitialChannelsDep) sendInitialChannelsDep(channels, peerId);
+        if (sendChatHistoryDep && chatHistory.length > 0) sendChatHistoryDep(chatHistory, peerId);
+        if (whiteboardModuleRef) whiteboardModuleRef.sendInitialWhiteboardStateToPeer(peerId, getIsHostDep);
+        if (kanbanModuleRef) kanbanModuleRef.sendInitialKanbanStateToPeer(peerId, getIsHostDep);
+        if (documentModuleRef) documentModuleRef.sendInitialDocumentsStateToPeer(peerId, getIsHostDep);
+    }
+}
+
+export function displaySystemMessage(message) {
+    addMessageToHistoryAndDisplay({ message, timestamp: Date.now(), isSystem: true }, false, true);
+}
+
+export function resetShareModuleStates(isCreatingHost = false) {
+    chatHistory = [];
+    if (chatArea) chatArea.innerHTML = '';
+    if (messageInput) messageInput.value = '';
+    incomingFileBuffers.clear();
+
+    channels = [];
+    currentActiveChannelId = null;
+    if(channelListDiv) channelListDiv.innerHTML = '';
+    if(newChannelNameInput) newChannelNameInput.value = '';
+
+    if (whiteboardModuleRef) whiteboardModuleRef.resetWhiteboardState();
+    if (kanbanModuleRef) kanbanModuleRef.resetKanbanState();
+    if (documentModuleRef) documentModuleRef.resetDocumentState();
+    
+}
