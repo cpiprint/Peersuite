@@ -1,14 +1,7 @@
 FROM nginx:alpine
 
 # Copy the application files to the nginx html directory
-COPY index.html /usr/share/nginx/html/
-COPY main.js /usr/share/nginx/html/
-COPY share.js /usr/share/nginx/html/
-COPY media.js /usr/share/nginx/html/
-COPY whiteboard.js /usr/share/nginx/html/
-COPY kanban.js /usr/share/nginx/html/
-COPY document.js /usr/share/nginx/html/
-COPY tryjero.js /usr/share/nginx/html/
+COPY /src/*.* /usr/share/nginx/html/
 COPY peerspace.png /usr/share/nginx/html/
 # Add any other static assets like CSS files if they are separate
 
