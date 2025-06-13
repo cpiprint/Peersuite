@@ -1,3 +1,4 @@
+// media.js
 
 let localScreenShareStream;
 let localVideoCallStream;
@@ -22,10 +23,10 @@ let localGeneratedPeerIdDep;
 let getPeerNicknamesDep, getLocalNicknameDep;
 
 let startShareBtn, stopShareBtn, remoteVideosContainer;
-let localScreenSharePreviewContainer, localScreenSharePreviewVideo; 
+let localScreenSharePreviewContainer, localScreenSharePreviewVideo;
 
 let startVideoCallBtn, stopVideoCallBtn, remoteVideoChatContainer;
-let toggleLocalVideoPreviewCheckbox; 
+let toggleLocalVideoPreviewCheckbox;
 
 let startAudioCallBtn, stopAudioCallBtn, audioChatStatus;
 
@@ -56,7 +57,7 @@ export function initMediaFeatures(dependencies) {
     getPeerNicknamesDep = dependencies.getPeerNicknames;
     getLocalNicknameDep = dependencies.getLocalNickname;
 
- 
+
     if (typeof dependencies.initialVideoFlip === 'boolean') {
         localVideoFlipped = dependencies.initialVideoFlip;
     }
@@ -69,8 +70,8 @@ export function initMediaFeatures(dependencies) {
     if (dependencies.initialPttKeyDisplay) {
         pttKeyDisplay = dependencies.initialPttKeyDisplay;
     }
-    
-0
+
+
     if (pttEnabled) {
         window.addEventListener('keydown', handlePttKeyDown);
         window.addEventListener('keyup', handlePttKeyUp);
@@ -149,7 +150,7 @@ export function enableMediaButtons() {
     if(startAudioCallBtn && startAudioCallBtn.title !== "Audio not supported") startAudioCallBtn.disabled = false;
     if(stopAudioCallBtn) stopAudioCallBtn.disabled = true;
 
-    updateAudioChatStatusUI(); 
+    updateAudioChatStatusUI();
 }
 
 
@@ -232,6 +233,25 @@ function displayRemoteScreenShareStream(stream, peerId) {
     let videoContainer = document.getElementById(`container-screenshare-${peerId}`);
     let remoteVideo = document.getElementById(`video-screenshare-${peerId}`);
 
+    // Define a cleanup function for this specific screen share UI
+    const cleanupScreenShareUI = () => {
+        // Re-fetch elements inside closure to ensure they are current
+        const currentVideoContainer = document.getElementById(`container-screenshare-${peerId}`);
+        const currentRemoteVideo = document.getElementById(`video-screenshare-${peerId}`);
+
+        if (currentRemoteVideo) {
+            currentRemoteVideo.srcObject = null; // Important: clear the srcObject
+        }
+        if (currentVideoContainer && currentVideoContainer.parentNode) {
+            currentVideoContainer.remove(); // Remove the entire container
+        }
+        // Check if it's already logged or avoid duplicate logs if track.onended also calls this
+        // Check if the element is actually gone from the DOM before logging
+        if (!document.getElementById(`container-screenshare-${peerId}`)) {
+             logStatusDep(`Screen share from ${streamPeerNickname} has ended.`);
+        }
+    };
+
     if (!videoContainer) {
         videoContainer = document.createElement('div');
         videoContainer.id = `container-screenshare-${peerId}`;
@@ -253,10 +273,13 @@ function displayRemoteScreenShareStream(stream, peerId) {
         maximizeBtn.style.fontSize = '0.8em';
         maximizeBtn.style.padding = 'var(--space-xs) var(--space-sm)';
         maximizeBtn.onclick = () => {
-            if (remoteVideo.requestFullscreen) remoteVideo.requestFullscreen();
-            else if (remoteVideo.mozRequestFullScreen) remoteVideo.mozRequestFullScreen();
-            else if (remoteVideo.webkitRequestFullscreen) remoteVideo.webkitRequestFullscreen();
-            else if (remoteVideo.msRequestFullscreen) remoteVideo.msRequestFullscreen();
+            const videoToMaximize = document.getElementById(`video-screenshare-${peerId}`); // Re-fetch
+            if (videoToMaximize) {
+                if (videoToMaximize.requestFullscreen) videoToMaximize.requestFullscreen();
+                else if (videoToMaximize.mozRequestFullScreen) videoToMaximize.mozRequestFullScreen();
+                else if (videoToMaximize.webkitRequestFullscreen) videoToMaximize.webkitRequestFullscreen();
+                else if (videoToMaximize.msRequestFullscreen) videoToMaximize.msRequestFullscreen();
+            }
         };
         videoContainer.appendChild(maximizeBtn);
         if(remoteVideosContainer) remoteVideosContainer.appendChild(videoContainer);
@@ -267,17 +290,13 @@ function displayRemoteScreenShareStream(stream, peerId) {
         remoteVideo.srcObject = stream;
     }
 
-    stream.onremovetrack = () => {
-        if (stream.getTracks().length === 0 && remoteVideo) {
-            remoteVideo.srcObject = null;
-            logStatusDep(`Screen share stream ended from ${streamPeerNickname}`);
-        }
-    };
+    stream.oninactive = cleanupScreenShareUI; // Primary handler for stream ending
+
     stream.getTracks().forEach(track => {
         track.onended = () => {
-            if ((!stream.active || stream.getTracks().every(t => t.readyState === 'ended')) && remoteVideo) {
-                remoteVideo.srcObject = null;
-                 logStatusDep(`Screen share track ended from ${streamPeerNickname}`);
+            // If the stream is no longer active after this track ended, trigger cleanup
+            if (!stream.active) {
+                cleanupScreenShareUI();
             }
         };
     });
@@ -307,7 +326,7 @@ function addLocalVideoToGrid() {
 
     const nicknameP = document.createElement('p');
     let localUserNickname = "You";
-    try { 
+    try {
         if (typeof getLocalNicknameDep === 'function' && getLocalNicknameDep()) {
              localUserNickname = getLocalNicknameDep();
         }
@@ -365,7 +384,7 @@ async function startLocalVideoCall() {
 
         localVideoCallStream.getTracks().forEach(track => {
             track.onended = () => {
-                stopLocalVideoCall(true);
+                stopLocalVideoCall(true); // This will handle local cleanup
             };
         });
 
@@ -401,11 +420,30 @@ async function stopLocalVideoCall(updateButtons = true) {
 }
 
 function handleIncomingVideoChatStream(stream, peerId) {
-    if (peerId === localGeneratedPeerIdDep) return; 
+    if (peerId === localGeneratedPeerIdDep) return;
     const streamPeerNickname = getPeerNicknamesDep()[peerId] || `User ${peerId.substring(0, 6)}`;
     logStatusDep(`Receiving Video Chat stream from ${streamPeerNickname}.`);
 
     let peerElement = peerVideoElements[peerId];
+
+    // Define a cleanup function for this specific video chat UI
+    const cleanupVideoChatUI = () => {
+        const currentPeerElement = peerVideoElements[peerId]; // Re-fetch in case of closure issues
+        if (currentPeerElement) {
+            if (currentPeerElement.video) {
+                currentPeerElement.video.srcObject = null; // Important: clear the srcObject
+            }
+            if (currentPeerElement.wrapper && currentPeerElement.wrapper.parentNode) {
+                currentPeerElement.wrapper.remove(); // Remove the wrapper
+            }
+            delete peerVideoElements[peerId]; // Clean up the reference
+        }
+        // Check if it's already logged or avoid duplicate logs
+        if (!peerVideoElements[peerId]) { // Check if already deleted
+            logStatusDep(`Video chat from ${streamPeerNickname} has ended.`);
+        }
+    };
+
     if (!peerElement) {
         const wrapper = document.createElement('div');
         wrapper.classList.add('remote-video-wrapper');
@@ -429,23 +467,23 @@ function handleIncomingVideoChatStream(stream, peerId) {
 
     if (peerElement.video.srcObject !== stream) {
         peerElement.video.srcObject = stream;
-        peerElement.stream = stream;
+        peerElement.stream = stream; // Ensure the stream reference is updated
     }
     if (peerElement.nicknameP.textContent !== streamPeerNickname) {
         peerElement.nicknameP.textContent = streamPeerNickname;
     }
 
-    stream.onremovetrack = () => {
-        if (stream.getTracks().length === 0 && peerVideoElements[peerId]) {
-            if (peerVideoElements[peerId].video) peerVideoElements[peerId].video.srcObject = null;
-            logStatusDep(`Video chat stream ended from ${streamPeerNickname}`);
-        }
-    };
-    stream.getTracks().forEach(track => {
+    // Ensure to use the correct stream object associated with the peerElement
+    // The stream passed to this function *is* the one we should be attaching listeners to.
+    const currentStream = stream;
+
+    currentStream.oninactive = cleanupVideoChatUI; // Primary handler for stream ending
+
+    currentStream.getTracks().forEach(track => {
         track.onended = () => {
-            if ((!stream.active || stream.getTracks().every(t => t.readyState === 'ended')) && peerVideoElements[peerId]) {
-                if (peerVideoElements[peerId].video) peerVideoElements[peerId].video.srcObject = null;
-                logStatusDep(`Video chat track ended from ${streamPeerNickname}`);
+            // If the stream is no longer active after this track ended, trigger cleanup
+            if (!currentStream.active) {
+                cleanupVideoChatUI();
             }
         };
     });
@@ -494,17 +532,17 @@ export function updatePttSettings(enabled, key, display) {
     } else if (!pttEnabled && oldPttEnabled) {
         window.removeEventListener('keydown', handlePttKeyDown);
         window.removeEventListener('keyup', handlePttKeyUp);
-        isPttKeyDown = false; 
+        isPttKeyDown = false;
     }
     updateAudioChatStatusUI();
 }
 
 function handlePttKeyDown(event) {
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) return;
-    const settingsModal = document.getElementById('settingsModal');
-    if (settingsModal && !settingsModal.classList.contains('hidden')) { // Ignore if settings modal is open
+    const settingsSection = document.getElementById('settingsSection'); // Changed from settingsModal
+    if (settingsSection && !settingsSection.classList.contains('hidden')) {
         const pttKeyInstructions = document.getElementById('pttKeyInstructions');
-        if (pttKeyInstructions && !pttKeyInstructions.classList.contains('hidden')) { // And actively capturing key
+        if (pttKeyInstructions && !pttKeyInstructions.classList.contains('hidden')) {
              return;
         }
     }
@@ -518,10 +556,10 @@ function handlePttKeyDown(event) {
 
 function handlePttKeyUp(event) {
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) return;
-    const settingsModal = document.getElementById('settingsModal');
-     if (settingsModal && !settingsModal.classList.contains('hidden')) { // Ignore if settings modal is open
+    const settingsSection = document.getElementById('settingsSection'); // Changed from settingsModal
+     if (settingsSection && !settingsSection.classList.contains('hidden')) {
         const pttKeyInstructions = document.getElementById('pttKeyInstructions');
-        if (pttKeyInstructions && !pttKeyInstructions.classList.contains('hidden')) { // And actively capturing key
+        if (pttKeyInstructions && !pttKeyInstructions.classList.contains('hidden')) {
              return;
         }
     }
@@ -554,7 +592,7 @@ async function startLocalAudioCall() {
 
         if(startAudioCallBtn) startAudioCallBtn.disabled = true;
         if(stopAudioCallBtn) stopAudioCallBtn.disabled = false;
-        
+
         updateAudioChatStatusUI();
         showNotificationDep('audioChatSection');
 
@@ -588,7 +626,7 @@ async function stopLocalAudioCall(updateButtons = true) {
             try { await roomApiDep.removeStream(localAudioStream, null, { streamType: 'audiochat' }); }
             catch (e) { console.error("Exception calling roomApi.removeStream for audio call:", e); }
         }
-        localAudioStream.getAudioTracks().forEach(track => track.enabled = true);
+        localAudioStream.getAudioTracks().forEach(track => track.enabled = true); // Ensure re-enabled if PTT was on
         localAudioStream.getTracks().forEach(track => { track.onended = null; track.stop(); });
         localAudioStream = null;
     }
@@ -606,17 +644,29 @@ function handleIncomingAudioChatStream(stream, peerId) {
     const streamPeerNickname = getPeerNicknamesDep()[peerId] || `User ${peerId.substring(0, 6)}`;
     logStatusDep(`Receiving Audio Chat stream from ${streamPeerNickname}.`);
 
-    if (peerAudios[peerId]) {
-        peerAudios[peerId].pause();
-        peerAudios[peerId].srcObject = null;
+    const cleanupAudioUI = () => {
+        const audioElToClean = peerAudios[peerId];
+        if (audioElToClean) {
+            audioElToClean.pause();
+            audioElToClean.srcObject = null;
+            if (audioElToClean.parentNode) {
+                audioElToClean.remove();
+            }
+            delete peerAudios[peerId];
+        }
+        if (!peerAudios[peerId]) { // Check if already deleted
+             logStatusDep(`Audio chat from ${streamPeerNickname} has ended.`);
+        }
+    };
+
+    if (peerAudios[peerId]) { // If an old audio element exists, clean it up first
+        cleanupAudioUI();
     }
 
-    let audioEl = peerAudios[peerId];
-    if (!audioEl) {
-        audioEl = document.createElement('audio');
-        document.body.appendChild(audioEl);
-        peerAudios[peerId] = audioEl;
-    }
+    let audioEl = document.createElement('audio');
+    document.body.appendChild(audioEl);
+    peerAudios[peerId] = audioEl;
+
 
     audioEl.srcObject = stream;
     audioEl.autoplay = true;
@@ -626,19 +676,12 @@ function handleIncomingAudioChatStream(stream, peerId) {
         console.error(`Error with audio element for ${streamPeerNickname}:`, e);
     });
 
-    stream.onremovetrack = () => {
-        if (stream.getTracks().length === 0 && peerAudios[peerId]) {
-            peerAudios[peerId].pause();
-            peerAudios[peerId].srcObject = null;
-            logStatusDep(`Audio chat stream ended from ${streamPeerNickname}`);
-        }
-    };
+    stream.oninactive = cleanupAudioUI;
+
     stream.getTracks().forEach(track => {
         track.onended = () => {
-             if ((!stream.active || stream.getTracks().every(t => t.readyState === 'ended')) && peerAudios[peerId]) {
-                peerAudios[peerId].pause();
-                peerAudios[peerId].srcObject = null;
-                logStatusDep(`Audio chat track ended from ${streamPeerNickname}`);
+             if (!stream.active) {
+                cleanupAudioUI();
             }
         };
     });
@@ -682,15 +725,22 @@ export function setupMediaForNewPeer(joinedPeerId) {
 }
 
 export function cleanupMediaForPeer(leftPeerId) {
-    const screenShareVideoEl = document.getElementById(`container-screenshare-${leftPeerId}`);
-    if (screenShareVideoEl) screenShareVideoEl.remove();
+    // Screen share elements are directly identified by ID and removed
+    const screenShareVideoContainer = document.getElementById(`container-screenshare-${leftPeerId}`);
+    if (screenShareVideoContainer) {
+        const videoEl = screenShareVideoContainer.querySelector('video');
+        if (videoEl) videoEl.srcObject = null;
+        screenShareVideoContainer.remove();
+    }
 
+    // Video chat elements
     if (peerVideoElements[leftPeerId]) {
         if (peerVideoElements[leftPeerId].video) peerVideoElements[leftPeerId].video.srcObject = null;
         if (peerVideoElements[leftPeerId].wrapper) peerVideoElements[leftPeerId].wrapper.remove();
         delete peerVideoElements[leftPeerId];
     }
 
+    // Audio chat elements
     if (peerAudios[leftPeerId]) {
         peerAudios[leftPeerId].pause();
         peerAudios[leftPeerId].srcObject = null;
@@ -707,7 +757,7 @@ export function resetMediaUIAndState() {
     if (localAudioStream) { localAudioStream.getTracks().forEach(t => t.stop()); localAudioStream = null; }
     isPttKeyDown = false;
 
-    if(startShareBtn) { startShareBtn.title = ""; }
+    if(startShareBtn) { startShareBtn.title = ""; } // Reset title in case it was 'not supported'
     if(remoteVideosContainer) remoteVideosContainer.innerHTML = '';
     if(localScreenSharePreviewVideo) localScreenSharePreviewVideo.srcObject = null;
     if(localScreenSharePreviewContainer) localScreenSharePreviewContainer.classList.add('hidden');
@@ -724,19 +774,21 @@ export function resetMediaUIAndState() {
     });
     peerAudios = {};
 
-    enableMediaButtons();
+    enableMediaButtons(); // Re-checks capabilities and sets button states
 }
 
 export function updatePeerNicknameInUI(peerId, newNickname) {
+    // Update video chat nickname
     if (peerVideoElements[peerId] && peerVideoElements[peerId].nicknameP) {
         peerVideoElements[peerId].nicknameP.textContent = newNickname;
     }
-    
+
+    // Update local video preview nickname (if it's this peer)
     if (localVideoPreviewElement && peerId === localGeneratedPeerIdDep) {
         const nicknameP = localVideoPreviewElement.querySelector('p');
         if (nicknameP) {
             let currentLocalNickname = "You";
-             try { 
+             try {
                 if (typeof getLocalNicknameDep === 'function' && getLocalNicknameDep()) {
                      currentLocalNickname = getLocalNicknameDep();
                 }
@@ -744,6 +796,8 @@ export function updatePeerNicknameInUI(peerId, newNickname) {
             nicknameP.textContent = (newNickname || currentLocalNickname) + " (Preview)";
         }
     }
+
+    // Update screen share nickname
     const screenShareContainer = document.getElementById(`container-screenshare-${peerId}`);
     if (screenShareContainer) {
         const pElement = screenShareContainer.querySelector('p');
