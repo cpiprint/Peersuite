@@ -213,7 +213,7 @@ if (settingsSaveBtn) {
     });
 }
 
-// Enhanced theme switching for three themes
+
 function initTheme() {
     const savedTheme = localStorage.getItem('viewPartyTheme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
@@ -228,7 +228,7 @@ function initTheme() {
 function updateThemeToggle(currentTheme) {
     if (!themeToggle) return;
     
-    // Update the toggle visual based on current theme
+
     switch(currentTheme) {
         case 'light':
             themeToggle.checked = false;
@@ -239,7 +239,7 @@ function updateThemeToggle(currentTheme) {
             themeToggle.style.setProperty('--toggle-color', '#333333');
             break;
         case 'frutiger':
-            themeToggle.checked = false; // We'll make it look different
+            themeToggle.checked = false;
             themeToggle.style.setProperty('--toggle-color', '#00D4FF');
             break;
     }
@@ -273,7 +273,6 @@ function cycleTheme() {
         shareModule.redrawWhiteboardFromHistoryIfVisible();
     }
     
-    // Log theme change for user feedback
     logStatus(`Theme changed to: ${nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1)}`);
 }
 
@@ -291,15 +290,15 @@ function updateThemeLabel() {
             themeSwitch.setAttribute('data-theme-name', 'Dark');
             break;
         case 'frutiger':
-            themeSwitch.setAttribute('data-theme-name', 'Liquid Glass');
+            themeSwitch.setAttribute('data-theme-name', 'Aero');
             break;
     }
 }
 
-// Initialize theme toggle event listener
+
 if (themeToggle) {
     themeToggle.addEventListener('click', (e) => {
-        e.preventDefault(); // Prevent default checkbox behavior
+        e.preventDefault();
         cycleTheme();
     });
 }
