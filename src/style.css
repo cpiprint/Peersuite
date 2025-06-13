@@ -66,6 +66,323 @@
   --priority-critical: #7b1fa2;
 }
 
+/* Frutiger Aero + Liquid Glass Theme */
+[data-theme="frutiger"] {
+  /* Base colors inspired by Frutiger Aero */
+  --primary: #00D4FF;
+  --primary-dark: #0099CC;
+  --secondary: #FF6B6B;
+  --bg-primary: linear-gradient(135deg, #E8F8FF 0%, #F0FFFF 50%, #E0F6FF 100%);
+  --bg-secondary: rgba(255, 255, 255, 0.25);
+  --bg-card: rgba(255, 255, 255, 0.4);
+  --text-primary: #2C3E50;
+  --text-secondary: #34495E;
+  --border-color: rgba(135, 206, 235, 0.3);
+  --accent-color: var(--primary);
+  --accent-hover: var(--primary-dark);
+  
+  /* Glass effect variations */
+  --glass-regular: rgba(255, 255, 255, 0.4);
+  --glass-clear: rgba(255, 255, 255, 0.15);
+  --glass-blur: blur(20px);
+  --glass-blur-light: blur(10px);
+  
+  /* Frutiger Aero specific colors */
+  --aurora-blue: #00D4FF;
+  --aurora-green: #7DCEA0;
+  --aurora-yellow: #F7DC6F;
+  --ocean-blue: #5DADE2;
+  --nature-green: #58D68D;
+  --bubble-highlight: rgba(255, 255, 255, 0.8);
+  
+  /* Message colors with glass effect */
+  --self-message: rgba(135, 206, 235, 0.25);
+  --other-message: rgba(125, 206, 160, 0.25);
+  --pm-self: rgba(135, 206, 235, 0.3);
+  --pm-other: rgba(247, 220, 111, 0.3);
+  --pm-border: var(--secondary);
+  --system-message: rgba(255, 255, 255, 0.3);
+  --system-text: #2C3E50;
+  --danger-color: #E74C3C;
+  --danger-hover: #C0392B;
+  --info-bg: rgba(135, 206, 235, 0.2);
+  --info-border: var(--primary);
+  --user-hover: rgba(255, 255, 255, 0.3);
+  --file-message-bg: rgba(135, 206, 235, 0.2);
+  --notification-dot-color: #FF6B6B;
+  
+  /* Kanban priority colors with aurora effect */
+  --priority-low: #7DCEA0;
+  --priority-medium: #F7DC6F;
+  --priority-high: #F1948A;
+  --priority-critical: #BB8FCE;
+  
+  /* Glass enhancement filters */
+  --glass-filter: url(#glass-highlight);
+  --glass-distortion: url(#glass-distortion);
+}
+
+/* Apply glass effects to major containers in Frutiger theme */
+[data-theme="frutiger"] body {
+  background: var(--bg-primary);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Add aurora background effect */
+[data-theme="frutiger"] body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 20%, rgba(0, 212, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(125, 206, 160, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 40% 70%, rgba(247, 220, 111, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: -1;
+  animation: aurora-flow 20s ease-in-out infinite;
+}
+
+@keyframes aurora-flow {
+  0%, 100% { opacity: 0.3; transform: scale(1) rotate(0deg); }
+  33% { opacity: 0.5; transform: scale(1.1) rotate(2deg); }
+  66% { opacity: 0.4; transform: scale(0.9) rotate(-1deg); }
+}
+
+/* Enhanced card effect with liquid glass */
+[data-theme="frutiger"] .card {
+  background: var(--glass-regular);
+  backdrop-filter: var(--glass-blur-light);
+  -webkit-backdrop-filter: var(--glass-blur-light);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+[data-theme="frutiger"] .card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+  opacity: 0.6;
+}
+
+[data-theme="frutiger"] .card::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  border-radius: 14px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* Liquid glass buttons */
+[data-theme="frutiger"] .btn {
+  background: linear-gradient(135deg, var(--aurora-blue) 0%, var(--ocean-blue) 100%);
+  backdrop-filter: var(--glass-blur-light);
+  -webkit-backdrop-filter: var(--glass-blur-light);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="frutiger"] .btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transition: left 0.5s ease;
+}
+
+[data-theme="frutiger"] .btn:hover::before {
+  left: 100%;
+}
+
+[data-theme="frutiger"] .btn:hover {
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--aurora-blue) 100%);
+  box-shadow: 0 8px 32px rgba(0, 212, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Sidebar with glass effect */
+[data-theme="frutiger"] .sidebar-navigation {
+  background: var(--glass-regular);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-right: 1px solid rgba(135, 206, 235, 0.3);
+}
+
+[data-theme="frutiger"] .sidebar-button.active {
+  background: linear-gradient(135deg, var(--aurora-blue) 0%, var(--ocean-blue) 100%);
+  backdrop-filter: var(--glass-blur-light);
+  -webkit-backdrop-filter: var(--glass-blur-light);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.3);
+}
+
+/* App header with aurora gradient */
+[data-theme="frutiger"] .app-header {
+  background: linear-gradient(135deg, var(--aurora-blue) 0%, var(--nature-green) 100%);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Messages with bubble effect */
+[data-theme="frutiger"] .message {
+  backdrop-filter: var(--glass-blur-light);
+  -webkit-backdrop-filter: var(--glass-blur-light);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+}
+
+[data-theme="frutiger"] .message::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 12px;
+  height: 12px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, transparent 70%);
+  border-radius: 50%;
+  opacity: 0.6;
+}
+
+/* Kanban cards with liquid glass */
+[data-theme="frutiger"] .kanban-card {
+  background: var(--glass-regular);
+  backdrop-filter: var(--glass-blur-light);
+  -webkit-backdrop-filter: var(--glass-blur-light);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  position: relative;
+}
+
+[data-theme="frutiger"] .kanban-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    var(--bubble-highlight) 20%, 
+    var(--bubble-highlight) 80%, 
+    transparent 100%);
+  opacity: 0.7;
+}
+
+/* Input fields with glass effect */
+[data-theme="frutiger"] input[type="text"], 
+[data-theme="frutiger"] input[type="password"], 
+[data-theme="frutiger"] textarea {
+  background: var(--glass-clear);
+  backdrop-filter: var(--glass-blur-light);
+  -webkit-backdrop-filter: var(--glass-blur-light);
+  border: 1px solid rgba(135, 206, 235, 0.4);
+}
+
+[data-theme="frutiger"] input[type="text"]:focus, 
+[data-theme="frutiger"] input[type="password"]:focus, 
+[data-theme="frutiger"] textarea:focus {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: var(--aurora-blue);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.2);
+}
+
+/* Whiteboard canvas with enhanced glass frame */
+[data-theme="frutiger"] .whiteboard-canvas-container {
+  background: var(--glass-regular);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 
+    0 8px 32px rgba(0, 212, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* Enhanced notification dots with glow */
+[data-theme="frutiger"] .notification-dot {
+  background: radial-gradient(circle, #FF6B6B 0%, #E74C3C 100%);
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.6);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 107, 107, 0.6); }
+  50% { box-shadow: 0 0 16px rgba(255, 107, 107, 0.8); }
+}
+
+/* Enhanced theme toggle for three themes */
+.theme-switch {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.theme-switch-track {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 24px;
+  background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
+  border-radius: 12px;
+  margin: 0 var(--space-sm);
+  transition: all var(--transition-normal);
+  border: 2px solid var(--border-color);
+  overflow: hidden;
+}
+
+[data-theme="dark"] .theme-switch-track {
+  background: linear-gradient(135deg, #444 0%, #333 100%);
+  border-color: #666;
+}
+
+[data-theme="frutiger"] .theme-switch-track {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.3) 0%, rgba(125, 206, 160, 0.3) 100%);
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.theme-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  transition: all var(--transition-normal);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+[data-theme="dark"] .theme-switch-thumb {
+  transform: translateX(20px);
+  background: #666;
+}
+
+[data-theme="frutiger"] .theme-switch-thumb {
+  transform: translateX(36px);
+  background: linear-gradient(135deg, #00D4FF 0%, #7DCEA0 100%);
+  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.4);
+}
+
 * {
   box-sizing: border-box;
   transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
@@ -640,16 +957,6 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
   box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15), inset 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
-.theme-switch { display: flex; align-items: center; cursor: pointer; }
-.theme-switch-track {
-  position: relative; display: inline-block; width: 40px; height: 20px;
-  background-color: #ccc; border-radius: 10px; margin: 0 var(--space-sm);
-  transition: background-color var(--transition-normal);
-}
-.theme-switch-thumb {
-  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
-  background-color: white; border-radius: 50%; transition: transform var(--transition-normal);
-}
 .theme-switch-checkbox { display: none; }
 .theme-switch-checkbox:checked + .theme-switch-track { background-color: var(--accent-color); }
 .theme-switch-checkbox:checked + .theme-switch-track .theme-switch-thumb { transform: translateX(20px); }

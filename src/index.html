@@ -9,7 +9,40 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
 </head>
 <body>
-
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute; overflow:hidden" class="hidden">
+  <defs>
+    <!-- Glass distortion filter -->
+    <filter id="glass-distortion" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.008 0.008" numOctaves="2" seed="92" result="noise"/>
+      <feGaussianBlur in="noise" stdDeviation="2" result="blurred"/>
+      <feDisplacementMap in="SourceGraphic" in2="blurred" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    
+    <!-- Glass highlight filter -->
+    <filter id="glass-highlight" x="0%" y="0%" width="100%" height="100%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur"/>
+      <feSpecularLighting in="blur" result="specOut" lighting-color="#87CEEB" specularConstant="1.5" specularExponent="20">
+        <fePointLight x="-5000" y="-10000" z="20000"/>
+      </feSpecularLighting>
+      <feComposite in="specOut" in2="SourceAlpha" operator="in" result="specOut2"/>
+      <feComposite in="SourceGraphic" in2="specOut2" operator="arithmetic" k1="0" k2="1" k3="1" k4="0"/>
+    </filter>
+    
+    <!-- Aurora gradient definitions -->
+    <linearGradient id="aurora-blue-green" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00D4FF;stop-opacity:0.8" />
+      <stop offset="33%" style="stop-color:#5DADE2;stop-opacity:0.6" />
+      <stop offset="66%" style="stop-color:#58D68D;stop-opacity:0.6" />
+      <stop offset="100%" style="stop-color:#7DCEA0;stop-opacity:0.8" />
+    </linearGradient>
+    
+    <radialGradient id="bubble-gradient" cx="30%" cy="30%" r="70%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.8" />
+      <stop offset="70%" style="stop-color:#87CEEB;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:#5DADE2;stop-opacity:0.2" />
+    </radialGradient>
+  </defs>
+</svg>
 <div class="container">
     <div class="app-header">
         <div class="app-header-title-group">

@@ -213,24 +213,94 @@ if (settingsSaveBtn) {
     });
 }
 
+// Enhanced theme switching for three themes
 function initTheme() {
     const savedTheme = localStorage.getItem('viewPartyTheme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
-    if (themeToggle) themeToggle.checked = savedTheme === 'dark';
+    updateThemeToggle(savedTheme);
+    
     const shareModule = window.shareModuleRef;
     if (shareModule && shareModule.redrawWhiteboardFromHistoryIfVisible) {
         shareModule.redrawWhiteboardFromHistoryIfVisible();
     }
 }
+
+function updateThemeToggle(currentTheme) {
+    if (!themeToggle) return;
+    
+    // Update the toggle visual based on current theme
+    switch(currentTheme) {
+        case 'light':
+            themeToggle.checked = false;
+            themeToggle.style.setProperty('--toggle-color', '#0078d7');
+            break;
+        case 'dark':
+            themeToggle.checked = true;
+            themeToggle.style.setProperty('--toggle-color', '#333333');
+            break;
+        case 'frutiger':
+            themeToggle.checked = false; // We'll make it look different
+            themeToggle.style.setProperty('--toggle-color', '#00D4FF');
+            break;
+    }
+    updateThemeLabel();
+}
+
+function cycleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    let nextTheme;
+    
+    switch(currentTheme) {
+        case 'light':
+            nextTheme = 'dark';
+            break;
+        case 'dark':
+            nextTheme = 'frutiger';
+            break;
+        case 'frutiger':
+            nextTheme = 'light';
+            break;
+        default:
+            nextTheme = 'light';
+    }
+    
+    document.documentElement.setAttribute('data-theme', nextTheme);
+    localStorage.setItem('viewPartyTheme', nextTheme);
+    updateThemeToggle(nextTheme);
+    
+    const shareModule = window.shareModuleRef;
+    if (shareModule && shareModule.redrawWhiteboardFromHistoryIfVisible) {
+        shareModule.redrawWhiteboardFromHistoryIfVisible();
+    }
+    
+    // Log theme change for user feedback
+    logStatus(`Theme changed to: ${nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1)}`);
+}
+
+function updateThemeLabel() {
+    if (!themeToggle || !themeToggle.closest('.theme-switch')) return;
+    
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    const themeSwitch = themeToggle.closest('.theme-switch');
+    
+    switch(currentTheme) {
+        case 'light':
+            themeSwitch.setAttribute('data-theme-name', 'Light');
+            break;
+        case 'dark':
+            themeSwitch.setAttribute('data-theme-name', 'Dark');
+            break;
+        case 'frutiger':
+            themeSwitch.setAttribute('data-theme-name', 'Liquid Glass');
+            break;
+    }
+}
+
+// Initialize theme toggle event listener
 if (themeToggle) {
-    themeToggle.addEventListener('change', () => {
-        const newTheme = themeToggle.checked ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('viewPartyTheme', newTheme);
-        const shareModule = window.shareModuleRef;
-        if (shareModule && shareModule.redrawWhiteboardFromHistoryIfVisible) {
-            shareModule.redrawWhiteboardFromHistoryIfVisible();
-        }
+    themeToggle.addEventListener('click', (e) => {
+        e.preventDefault(); // Prevent default checkbox behavior
+        cycleTheme();
     });
 }
 
@@ -837,9 +907,52 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     console.warn("Video/Audio capture not supported by your browser.");
 }
 
+// Add theme enhancement CSS
+const themeToggleCSS = `
+/* Theme toggle enhancement for better visual feedback */
+.theme-switch::after {
+    content: attr(data-theme-name);
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7em;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* Enhance theme toggle track appearance */
+[data-theme="frutiger"] .theme-switch-track::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(125, 206, 160, 0.2) 100%);
+    border-radius: inherit;
+    animation: aurora-glow 3s ease-in-out infinite;
+}
+
+@keyframes aurora-glow {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 0.8; }
+}
+`;
+
+// Inject enhanced theme CSS
+const styleSheet = document.createElement('style');
+styleSheet.textContent = themeToggleCSS;
+document.head.appendChild(styleSheet);
+
+// Initialize everything
 initTheme();
 loadSettings();
 resetToSetupState();
+updateThemeLabel();
+
 console.log('PeerSuite: Enter username and choose an action: Create, Join, or Import a workspace.');
 if (setupSection && !setupSection.classList.contains('hidden')) {
     const initialSetupMessage = document.createElement('p');
