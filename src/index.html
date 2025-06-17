@@ -163,7 +163,7 @@
                         </div>
                         <div class="user-list-sidebar">
                              <h3>Users Online</h3>
-                             <ul id="userList" class="card"></ul>
+                             <ul id="userList" class="card"></ul> <!-- Individual sliders go in here via JS -->
                         </div>
                     </div>
                 </div>
@@ -288,6 +288,12 @@
                         <button id="settingsPttKeyBtn" class="btn btn-outline">Space</button>
                         <span id="pttKeyInstructions" class="hidden">Press any key... (Esc to cancel)</span>
                     </div>
+                </div>
+
+                <div class="settings-option">
+                    <label for="settingsGlobalVolumeSlider" style="white-space: nowrap;">Global Audio Volume:</label>
+                    <input type="range" id="settingsGlobalVolumeSlider" min="0" max="1" step="0.01" value="1" style="flex-grow: 1; margin-bottom:0;">
+                    <span id="globalVolumeValue" style="min-width: 40px; text-align: right;">100%</span>
                 </div>
 
                 <div class="settings-actions">

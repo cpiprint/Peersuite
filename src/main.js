@@ -1,15 +1,17 @@
+// main.js
+
 import { joinRoom, selfId as localGeneratedPeerId } from './trystero-torrent.min.js';
 import {
     initShareFeatures,
     getShareableData,
     loadShareableData,
     resetShareModuleStates,
-    setShareModulePeerInfo,
+    setShareModulePeerInfo, // This function might not be strictly needed if share.js doesn't directly use peerNicknames for its internal logic beyond what's passed
     handleShareModulePeerLeave
 } from './share.js';
 import { initMediaFeatures, handleMediaPeerStream, stopAllLocalMedia, setupMediaForNewPeer, cleanupMediaForPeer } from './media.js';
 
-const APP_ID = 'PeerSuite-0.1.2-jun01';
+const APP_ID = 'PeerSuite-0.1.3-jun02'; // Example: Increment version
 
 const wordList = [
     "able", "acid", "army", "away", "baby", "back", "ball", "band", "bank", "base",
@@ -58,19 +60,25 @@ const pttHotkeySettingsContainer = document.getElementById('pttHotkeySettingsCon
 const settingsPttKeyBtn = document.getElementById('settingsPttKeyBtn');
 const pttKeyInstructions = document.getElementById('pttKeyInstructions');
 const settingsSaveBtn = document.getElementById('settingsSaveBtn');
+
+const settingsGlobalVolumeSlider = document.getElementById('settingsGlobalVolumeSlider');
+const globalVolumeValue = document.getElementById('globalVolumeValue');
+
 let isCapturingPttKey = false;
 let roomApi;
 let localNickname = '';
 let currentRoomId = '';
 let currentActiveSection = 'chatSection';
-let peerNicknames = {};
+let peerNicknames = {}; // { peerId: nickname }
 let isHost = false;
 let importedWorkspaceState = null;
+
 let peerSuiteSettings = {
     videoFlip: false,
     pttEnabled: false,
     pttKey: 'Space',
-    pttKeyDisplay: 'Space'
+    pttKeyDisplay: 'Space',
+    globalVolume: 1,
 };
 
 let sendChatMessage, onChatMessage, sendNickname, onNickname, sendPrivateMessage, onPrivateMessage;
@@ -105,15 +113,16 @@ function loadSettings() {
     if (savedSettings) {
         try {
             const parsedSettings = JSON.parse(savedSettings);
-                      peerSuiteSettings = {
+            peerSuiteSettings = {
                 videoFlip: typeof parsedSettings.videoFlip === 'boolean' ? parsedSettings.videoFlip : false,
                 pttEnabled: typeof parsedSettings.pttEnabled === 'boolean' ? parsedSettings.pttEnabled : false,
                 pttKey: typeof parsedSettings.pttKey === 'string' ? parsedSettings.pttKey : 'Space',
-                pttKeyDisplay: typeof parsedSettings.pttKeyDisplay === 'string' ? parsedSettings.pttKeyDisplay : 'Space'
+                pttKeyDisplay: typeof parsedSettings.pttKeyDisplay === 'string' ? parsedSettings.pttKeyDisplay : 'Space',
+                globalVolume: typeof parsedSettings.globalVolume === 'number' && !isNaN(parsedSettings.globalVolume) ? parsedSettings.globalVolume : 1,
             };
         } catch (e) {
             console.error("Error parsing saved settings, using defaults.", e);
-            peerSuiteSettings = { videoFlip: false, pttEnabled: false, pttKey: 'Space', pttKeyDisplay: 'Space' };
+            peerSuiteSettings = { videoFlip: false, pttEnabled: false, pttKey: 'Space', pttKeyDisplay: 'Space', globalVolume: 1 };
         }
     }
 
@@ -125,6 +134,9 @@ function loadSettings() {
     if (window.mediaModuleRef && window.mediaModuleRef.updatePttSettings) {
         window.mediaModuleRef.updatePttSettings(peerSuiteSettings.pttEnabled, peerSuiteSettings.pttKey, peerSuiteSettings.pttKeyDisplay);
     }
+    if (window.mediaModuleRef && window.mediaModuleRef.setGlobalVolume) {
+        window.mediaModuleRef.setGlobalVolume(peerSuiteSettings.globalVolume, false);
+    }
 }
 
 function saveSettings() {
@@ -133,12 +145,16 @@ function saveSettings() {
 
 
 function populateSettingsSection() {
-    if (!settingsNicknameInput || !settingsVideoFlipCheckbox || !settingsPttEnabledCheckbox || !settingsPttKeyBtn || !pttHotkeySettingsContainer) return;
+    if (!settingsNicknameInput || !settingsVideoFlipCheckbox || !settingsPttEnabledCheckbox || !settingsPttKeyBtn || !pttHotkeySettingsContainer ||
+        !settingsGlobalVolumeSlider || !globalVolumeValue) return;
     settingsNicknameInput.value = localNickname;
     settingsVideoFlipCheckbox.checked = peerSuiteSettings.videoFlip;
     settingsPttEnabledCheckbox.checked = peerSuiteSettings.pttEnabled;
     settingsPttKeyBtn.textContent = peerSuiteSettings.pttKeyDisplay;
     pttHotkeySettingsContainer.classList.toggle('hidden', !settingsPttEnabledCheckbox.checked);
+
+    settingsGlobalVolumeSlider.value = peerSuiteSettings.globalVolume;
+    globalVolumeValue.textContent = `${Math.round(peerSuiteSettings.globalVolume * 100)}%`;
 }
 
 
@@ -148,7 +164,7 @@ function handlePttKeyCapture(event) {
     event.stopPropagation();
 
     if (event.key === 'Escape') {
-
+        // Action handled by simply closing the capture state
     } else {
         peerSuiteSettings.pttKey = event.code;
         if (event.code === 'Space') peerSuiteSettings.pttKeyDisplay = 'Space';
@@ -187,7 +203,7 @@ if (settingsSaveBtn) {
         if (newNickname && newNickname !== localNickname) {
             localNickname = newNickname;
             localStorage.setItem('viewPartyNickname', localNickname);
-            if(currentNicknameSpan) currentNicknameSpan.textContent = escapeHtml(localNickname); // Escape here for display
+            if(currentNicknameSpan) currentNicknameSpan.textContent = escapeHtml(localNickname);
             updateUserList();
             if (roomApi && sendNickname) {
                 await sendNickname({ nickname: localNickname, initialJoin: false, isHost: isHost });
@@ -200,16 +216,40 @@ if (settingsSaveBtn) {
         peerSuiteSettings.videoFlip = settingsVideoFlipCheckbox.checked;
         peerSuiteSettings.pttEnabled = settingsPttEnabledCheckbox.checked;
 
+        const newGlobalVolume = parseFloat(settingsGlobalVolumeSlider.value);
+        if (peerSuiteSettings.globalVolume !== newGlobalVolume) {
+            peerSuiteSettings.globalVolume = newGlobalVolume;
+            // mediaModuleRef.setGlobalVolume handles applying it if it exists
+        }
+        // All settings are applied live by their respective 'input' or 'change' handlers where appropriate,
+        // or here for settings without live handlers (like videoFlip, pttEnabled itself).
+        // The main purpose of "Save" is to persist to localStorage.
+
         saveSettings();
 
-        if (window.mediaModuleRef && window.mediaModuleRef.setLocalVideoFlip) {
-            window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip);
-        }
-        if (window.mediaModuleRef && window.mediaModuleRef.updatePttSettings) {
-            window.mediaModuleRef.updatePttSettings(peerSuiteSettings.pttEnabled, peerSuiteSettings.pttKey, peerSuiteSettings.pttKeyDisplay);
+        // Apply settings that might need explicit re-application or don't have live handlers
+        if (window.mediaModuleRef) {
+            if (window.mediaModuleRef.setLocalVideoFlip) {
+                 window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip);
+            }
+            if (window.mediaModuleRef.updatePttSettings) {
+                window.mediaModuleRef.updatePttSettings(peerSuiteSettings.pttEnabled, peerSuiteSettings.pttKey, peerSuiteSettings.pttKeyDisplay);
+            }
+            if (window.mediaModuleRef.setGlobalVolume) { // Ensure it's set from the potentially saved value
+                window.mediaModuleRef.setGlobalVolume(peerSuiteSettings.globalVolume, true);
+            }
         }
         logStatus("Settings saved.");
+    });
+}
 
+if (settingsGlobalVolumeSlider && globalVolumeValue) {
+    settingsGlobalVolumeSlider.addEventListener('input', () => {
+        const volume = parseFloat(settingsGlobalVolumeSlider.value);
+        globalVolumeValue.textContent = `${Math.round(volume * 100)}%`;
+        if (window.mediaModuleRef && window.mediaModuleRef.setGlobalVolume) {
+            window.mediaModuleRef.setGlobalVolume(volume, true); // Apply live
+        }
     });
 }
 
@@ -228,19 +268,15 @@ function initTheme() {
 function updateThemeToggle(currentTheme) {
     if (!themeToggle) return;
     
-
     switch(currentTheme) {
         case 'light':
             themeToggle.checked = false;
-            themeToggle.style.setProperty('--toggle-color', '#0078d7');
             break;
         case 'dark':
             themeToggle.checked = true;
-            themeToggle.style.setProperty('--toggle-color', '#333333');
             break;
         case 'frutiger':
-            themeToggle.checked = false;
-            themeToggle.style.setProperty('--toggle-color', '#00D4FF');
+            themeToggle.checked = false; // Or true, depending on your toggle sequence preference
             break;
     }
     updateThemeLabel();
@@ -304,13 +340,11 @@ if (themeToggle) {
 }
 
 sidebarButtons.forEach(button => {
-
     if (button.id === 'exportWorkspaceBtnSidebar') return;
 
     button.addEventListener('click', () => {
         const targetSectionId = button.getAttribute('data-section');
         const targetSectionElement = document.getElementById(targetSectionId);
-
 
         if (currentActiveSection === targetSectionId && targetSectionElement && !targetSectionElement.classList.contains('hidden')) {
             return;
@@ -394,36 +428,73 @@ function generateMemorableRoomCode() {
 
 function updateUserList() {
     if (!userListUl) return;
-    userListUl.innerHTML = '';
+    const fragment = document.createDocumentFragment();
     let count = 0;
+
     const selfLi = document.createElement('li');
     const selfBadge = document.createElement('span');
     selfBadge.className = 'status-badge';
     selfLi.appendChild(selfBadge);
     selfLi.appendChild(document.createTextNode(` ${escapeHtml(localNickname)} (You)${isHost ? ' (Host)' : ''}`));
-    userListUl.appendChild(selfLi);
+    fragment.appendChild(selfLi);
     count++;
-
 
     for (const peerId in peerNicknames) {
         const nickname = peerNicknames[peerId];
         const li = document.createElement('li');
+        li.classList.add('peer-name-container');
+        li.dataset.peerId = peerId;
+
+        const nameAndPmContainer = document.createElement('div');
+        nameAndPmContainer.className = 'peer-info-clickable';
         const peerBadge = document.createElement('span');
         peerBadge.className = 'status-badge';
-        li.appendChild(peerBadge);
-        li.appendChild(document.createTextNode(` ${escapeHtml(nickname)}`));
-        li.classList.add('peer-name');
-        li.title = `Click to private message ${escapeHtml(nickname)}`; // Escape nickname for title
-        li.dataset.peerId = peerId;
-        li.addEventListener('click', () => {
+        nameAndPmContainer.appendChild(peerBadge);
+        nameAndPmContainer.appendChild(document.createTextNode(` ${escapeHtml(nickname)}`));
+        nameAndPmContainer.title = `Click to private message ${escapeHtml(nickname)}`;
+        nameAndPmContainer.addEventListener('click', () => {
             const shareModule = window.shareModuleRef;
             if (shareModule && shareModule.primePrivateMessage) {
-                shareModule.primePrivateMessage(nickname); // Original nickname for function
+                shareModule.primePrivateMessage(nickname);
             }
         });
-        userListUl.appendChild(li);
+        li.appendChild(nameAndPmContainer);
+
+        const volumeControlContainer = document.createElement('div');
+        volumeControlContainer.className = 'peer-volume-control'; // Always visible for connected peers
+
+        const volumeIcon = document.createElement('span');
+        volumeIcon.textContent = '🔊';
+        volumeIcon.className = 'volume-icon';
+        volumeControlContainer.appendChild(volumeIcon);
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '0';
+        slider.max = '1';
+        slider.step = '0.01';
+        
+        let currentIndividualVolume = 1;
+        if (window.mediaModuleRef && window.mediaModuleRef.getIndividualVolume) {
+             currentIndividualVolume = window.mediaModuleRef.getIndividualVolume(peerId);
+        }
+        slider.value = currentIndividualVolume.toString();
+
+        slider.className = 'peer-volume-slider';
+        slider.title = `Volume for ${escapeHtml(nickname)}`;
+        slider.addEventListener('input', (e) => {
+            if (window.mediaModuleRef && window.mediaModuleRef.setIndividualVolume) {
+                window.mediaModuleRef.setIndividualVolume(peerId, parseFloat(e.target.value));
+            }
+        });
+        volumeControlContainer.appendChild(slider);
+        li.appendChild(volumeControlContainer);
+
+        fragment.appendChild(li);
         count++;
     }
+    userListUl.innerHTML = '';
+    userListUl.appendChild(fragment);
     if (userCountSpan) userCountSpan.textContent = count;
 }
 
@@ -500,10 +571,10 @@ if (importFilePicker) {
                 typeof importedWorkspaceState.channels === 'undefined' ||
                 typeof importedWorkspaceState.chatHistory === 'undefined'
             ) {
-                throw new Error("Invalid or incomplete workspace file structure (post-refactor).");
+                throw new Error("Invalid or incomplete workspace file structure.");
             }
             if (importedWorkspaceState.roomId && roomIdInput && !roomIdInput.value) { roomIdInput.value = importedWorkspaceState.roomId; }
-            logStatus(`Workspace "${file.name}" decrypted and ready. Enter workspace password and create/join to apply. (Imported ${importedWorkspaceState.roomId || 'workspace data'})`);
+            logStatus(`Workspace "${file.name}" decrypted. Enter workspace password and create/join to apply. (Imported ${importedWorkspaceState.roomId || 'data'})`);
         } catch (error) {
             console.error("Error importing workspace:", error);
             logStatus("Error importing: " + (error.message.includes("decrypt") ? "Incorrect password or corrupted file." : error.message), true);
@@ -520,18 +591,19 @@ async function joinRoomAndSetup() {
         return;
     }
     localStorage.setItem('viewPartyNickname', localNickname);
-    populateSettingsSection();
+    populateSettingsSection(); // Ensure settings UI reflects the nickname
 
     const roomPassword = roomPasswordInput.value;
     if (!roomPassword) {
         logStatus("Workspace password is required.", true);
+        // Re-enable setup buttons if password is missing
         if(createPartyBtn) createPartyBtn.disabled = false;
         if(joinWorkspaceBtn) joinWorkspaceBtn.disabled = false;
+        if(importWorkspaceBtn) importWorkspaceBtn.disabled = false;
         if(nicknameInput) nicknameInput.disabled = false;
         if(roomIdInput) roomIdInput.disabled = false;
         if(roomPasswordInput) roomPasswordInput.disabled = false;
         if(joinPasswordInput) joinPasswordInput.disabled = false;
-        if(importWorkspaceBtn) importWorkspaceBtn.disabled = false;
         return;
     }
 
@@ -549,13 +621,14 @@ async function joinRoomAndSetup() {
     } else {
         if (!roomIdToJoin) {
             logStatus("Room Code is required to join a workspace.", true);
+            // Re-enable setup buttons
             if(createPartyBtn) createPartyBtn.disabled = false;
             if(joinWorkspaceBtn) joinWorkspaceBtn.disabled = false;
+            if(importWorkspaceBtn) importWorkspaceBtn.disabled = false;
             if(nicknameInput) nicknameInput.disabled = false;
             if(roomIdInput) roomIdInput.disabled = false;
             if(roomPasswordInput) roomPasswordInput.disabled = false;
             if(joinPasswordInput) joinPasswordInput.disabled = false;
-            if(importWorkspaceBtn) importWorkspaceBtn.disabled = false;
             return;
         }
     }
@@ -567,7 +640,7 @@ async function joinRoomAndSetup() {
     }
     currentRoomId = sanitizedRoomId;
 
-    logStatus(`Connecting to workspace: ${currentRoomId}...`); // To chat
+    logStatus(`Connecting to workspace: ${currentRoomId}...`);
     if(confirmCreateBtn) confirmCreateBtn.disabled = true;
     if(confirmJoinBtn) confirmJoinBtn.disabled = true;
     if(createPartyBtn) createPartyBtn.disabled = true;
@@ -583,6 +656,7 @@ async function joinRoomAndSetup() {
         roomApi = await joinRoom(config, currentRoomId);
         logStatus("Setting up workspace features...");
 
+        // Initialize Trystero actions
         [sendChatMessage, onChatMessage] = roomApi.makeAction('chatMsg');
         [sendNickname, onNickname] = roomApi.makeAction('nick');
         [sendPrivateMessage, onPrivateMessage] = roomApi.makeAction('privMsg');
@@ -628,24 +702,27 @@ async function joinRoomAndSetup() {
             initialVideoFlip: peerSuiteSettings.videoFlip,
             initialPttEnabled: peerSuiteSettings.pttEnabled,
             initialPttKey: peerSuiteSettings.pttKey,
-            initialPttKeyDisplay: peerSuiteSettings.pttKeyDisplay
+            initialPttKeyDisplay: peerSuiteSettings.pttKeyDisplay,
+            initialGlobalVolume: peerSuiteSettings.globalVolume,
+            updateUserList: updateUserList, // Pass updateUserList for dynamic UI updates
         };
         window.mediaModuleRef = initMediaFeatures(mediaModuleDeps);
 
         if (importedWorkspaceState && isHost) {
-            logStatus("Applying imported workspace data..."); // To chat
-            logStatus("Imported workspace state is being applied by the share module for hosting."); // To chat
+            logStatus("Applying imported workspace data...");
+            // Share module's initShareFeatures should handle loading this via getImportedWorkspaceState
         } else if (isHost && window.shareModuleRef.ensureDefaultDocument) {
             window.shareModuleRef.ensureDefaultDocument();
         }
 
+        // Setup Trystero event handlers
         onChatMessage((data, peerId) => window.shareModuleRef.handleChatMessage(data, peerId));
         onPrivateMessage((data, peerId) => window.shareModuleRef.handlePrivateMessage(data, peerId));
         onFileMeta((data, peerId) => window.shareModuleRef.handleFileMeta(data, peerId));
         onFileChunk((data, peerId, chunkMeta) => window.shareModuleRef.handleFileChunk(data, peerId, chunkMeta));
 
         onDrawCommand((data, peerId) => window.shareModuleRef.handleDrawCommand(data, peerId));
-        onInitialWhiteboard((data, peerId) => window.shareModuleRef.handleInitialWhiteboard(data, peerId));
+        onInitialWhiteboard((data, peerId) => window.shareModuleRef.handleInitialWhiteboard(data, peerId)); // getIsHost() is internal to share.js
         onKanbanUpdate((data, peerId) => window.shareModuleRef.handleKanbanUpdate(data, peerId));
         onInitialKanban((data, peerId) => window.shareModuleRef.handleInitialKanban(data, peerId));
 
@@ -663,7 +740,7 @@ async function joinRoomAndSetup() {
             const { nickname, initialJoin, isHost: peerIsHost } = nicknameData;
             const oldNickname = peerNicknames[peerId];
             peerNicknames[peerId] = nickname;
-            if(window.shareModuleRef && setShareModulePeerInfo) setShareModulePeerInfo(peerNicknames);
+            // if(window.shareModuleRef && setShareModulePeerInfo) setShareModulePeerInfo(peerNicknames); // Likely not needed
 
             if (initialJoin && peerId !== localGeneratedPeerId) {
                 if (!oldNickname || oldNickname !== nickname) {
@@ -688,20 +765,23 @@ async function joinRoomAndSetup() {
             if (isHost && window.shareModuleRef && window.shareModuleRef.sendFullStateToPeer) {
                  window.shareModuleRef.sendFullStateToPeer(joinedPeerId);
             }
+            updateUserList(); // New peer joined, update the list
         });
 
         roomApi.onPeerLeave(leftPeerId => {
             const departedUser = peerNicknames[leftPeerId] || `Peer ${leftPeerId.substring(0, 6)}`;
             if(window.shareModuleRef && window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`${escapeHtml(departedUser)} has left.`);
             delete peerNicknames[leftPeerId];
-            updateUserList();
-            if(window.shareModuleRef && typeof setShareModulePeerInfo === 'function') setShareModulePeerInfo(peerNicknames);
+            // if(window.shareModuleRef && typeof setShareModulePeerInfo === 'function') setShareModulePeerInfo(peerNicknames); // Likely not needed
             if(typeof handleShareModulePeerLeave === 'function') handleShareModulePeerLeave(leftPeerId);
             if (window.mediaModuleRef && typeof cleanupMediaForPeer === 'function') cleanupMediaForPeer(leftPeerId);
+            updateUserList(); // Peer left, update the list
         });
 
         roomApi.onPeerStream((stream, peerId, metadata) => {
             if (window.mediaModuleRef && typeof handleMediaPeerStream === 'function') handleMediaPeerStream(stream, peerId, metadata);
+            // Note: updateUserList might be called from within media.js if a stream starts/stops,
+            // which is fine if we need to update based on that specific event.
         });
 
         logStatus("Finalizing workspace setup...");
@@ -713,9 +793,10 @@ async function joinRoomAndSetup() {
 
         if (window.mediaModuleRef && window.mediaModuleRef.enableMediaButtons) window.mediaModuleRef.enableMediaButtons();
 
+        // Send own nickname to existing peers
         if (sendNickname) await sendNickname({ nickname: localNickname, initialJoin: true, isHost: isHost }, Object.keys(roomApi.getPeers()).filter(p => p !== localGeneratedPeerId));
-        updateUserList();
-        if(window.shareModuleRef && typeof setShareModulePeerInfo === 'function') setShareModulePeerInfo(peerNicknames);
+        updateUserList(); // Initial user list after joining
+        // if(window.shareModuleRef && typeof setShareModulePeerInfo === 'function') setShareModulePeerInfo(peerNicknames); // Likely not needed
 
         if(window.shareModuleRef && window.shareModuleRef.displaySystemMessage) window.shareModuleRef.displaySystemMessage(`You joined workspace: ${currentRoomId} as ${escapeHtml(localNickname)}${isHost ? ' (Host)' : ''}.`);
 
@@ -739,11 +820,16 @@ async function joinRoomAndSetup() {
             }
         }
 
-        if (window.mediaModuleRef && window.mediaModuleRef.setLocalVideoFlip) {
-            window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip);
-        }
-        if (window.mediaModuleRef && window.mediaModuleRef.updatePttSettings) {
-            window.mediaModuleRef.updatePttSettings(peerSuiteSettings.pttEnabled, peerSuiteSettings.pttKey, peerSuiteSettings.pttKeyDisplay);
+        if (window.mediaModuleRef) {
+            if (window.mediaModuleRef.setLocalVideoFlip) {
+                window.mediaModuleRef.setLocalVideoFlip(peerSuiteSettings.videoFlip);
+            }
+            if (window.mediaModuleRef.updatePttSettings) {
+                window.mediaModuleRef.updatePttSettings(peerSuiteSettings.pttEnabled, peerSuiteSettings.pttKey, peerSuiteSettings.pttKeyDisplay);
+            }
+            if (window.mediaModuleRef.setGlobalVolume) {
+                window.mediaModuleRef.setGlobalVolume(peerSuiteSettings.globalVolume, true);
+            }
         }
 
         logStatus(`Connected to workspace: ${currentRoomId}`);
@@ -764,6 +850,7 @@ async function leaveRoomAndCleanup() {
         catch (e) { console.warn("Error leaving room:", e); }
     }
     roomApi = null;
+    // Reset all Trystero action variables
     sendChatMessage = onChatMessage = sendNickname = onNickname = sendPrivateMessage = onPrivateMessage = null;
     sendFileMeta = onFileMeta = sendFileChunk = onFileChunk = null;
     sendDrawCommand = onDrawCommand = sendInitialWhiteboard = onInitialWhiteboard = null;
@@ -782,9 +869,13 @@ function resetToSetupState() {
     if(inRoomInterface) inRoomInterface.classList.add('hidden');
     if(setupSection) setupSection.classList.remove('hidden');
 
+    // Re-enable setup form fields and buttons
     if(createPartyBtn) createPartyBtn.disabled = false;
     if(joinWorkspaceBtn) joinWorkspaceBtn.disabled = false;
     if(importWorkspaceBtn) importWorkspaceBtn.disabled = false;
+    if(confirmCreateBtn) confirmCreateBtn.disabled = false; // ensure these are re-enabled
+    if(confirmJoinBtn) confirmJoinBtn.disabled = false;   // ensure these are re-enabled
+
     if(createWorkspaceFields) createWorkspaceFields.classList.add('hidden');
     if(joinWorkspaceFields) joinWorkspaceFields.classList.add('hidden');
 
@@ -792,6 +883,7 @@ function resetToSetupState() {
     if(roomIdInput) { roomIdInput.disabled = false; roomIdInput.value = ''; }
     if(roomPasswordInput) { roomPasswordInput.disabled = false; roomPasswordInput.value = ''; }
     if(joinPasswordInput) { joinPasswordInput.disabled = false; joinPasswordInput.value = ''; }
+
 
     if (window.mediaModuleRef && window.mediaModuleRef.resetMediaUIAndState) window.mediaModuleRef.resetMediaUIAndState();
 
@@ -810,7 +902,6 @@ function resetToSetupState() {
 
     contentSections.forEach(section => section.classList.add('hidden'));
 
-
     const defaultSectionButton = document.querySelector('.sidebar-button[data-section="chatSection"]');
     const defaultSection = document.getElementById('chatSection');
     if (defaultSectionButton) defaultSectionButton.classList.add('active');
@@ -821,8 +912,11 @@ function resetToSetupState() {
     isHost = false;
     currentRoomId = '';
     importedWorkspaceState = null;
+    // loadSettings(); // Reload settings to ensure UI reflects last saved state or defaults
+    // populateSettingsSection(); // Called by loadSettings
 }
 
+// Event listeners for setup buttons
 if (createPartyBtn) {
     createPartyBtn.addEventListener('click', () => {
         if (joinWorkspaceFields) joinWorkspaceFields.classList.add('hidden');
@@ -849,7 +943,7 @@ if (confirmCreateBtn) {
 if (confirmJoinBtn) {
     confirmJoinBtn.addEventListener('click', () => {
         isHost = false;
-        if (joinPasswordInput && roomPasswordInput) {
+        if (joinPasswordInput && roomPasswordInput) { // Ensure roomPasswordInput gets value from joinPasswordInput
             roomPasswordInput.value = joinPasswordInput.value;
         }
         joinRoomAndSetup();
@@ -891,10 +985,11 @@ if (copyRoomCodeBtn) {
     });
 }
 
+// Initial setup
 localNickname = localStorage.getItem('viewPartyNickname') || '';
 if (nicknameInput) {
     nicknameInput.value = localNickname;
-    nicknameInput.addEventListener('input', () => {
+    nicknameInput.addEventListener('input', () => { // Save nickname as user types
         localStorage.setItem('viewPartyNickname', nicknameInput.value.trim());
     });
 }
@@ -906,9 +1001,7 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     console.warn("Video/Audio capture not supported by your browser.");
 }
 
-// Add theme enhancement CSS
 const themeToggleCSS = `
-/* Theme toggle enhancement for better visual feedback */
 .theme-switch::after {
     content: attr(data-theme-name);
     position: absolute;
@@ -921,8 +1014,6 @@ const themeToggleCSS = `
     white-space: nowrap;
     pointer-events: none;
 }
-
-/* Enhance theme toggle track appearance */
 [data-theme="frutiger"] .theme-switch-track::before {
     content: '';
     position: absolute;
@@ -934,32 +1025,30 @@ const themeToggleCSS = `
     border-radius: inherit;
     animation: aurora-glow 3s ease-in-out infinite;
 }
-
 @keyframes aurora-glow {
     0%, 100% { opacity: 0.5; }
     50% { opacity: 0.8; }
 }
 `;
-
-// Inject enhanced theme CSS
 const styleSheet = document.createElement('style');
 styleSheet.textContent = themeToggleCSS;
 document.head.appendChild(styleSheet);
 
-// Initialize everything
 initTheme();
-loadSettings();
-resetToSetupState();
+loadSettings(); // This will also call populateSettingsSection
+resetToSetupState(); // This ensures the UI is in the correct initial state.
 updateThemeLabel();
 
 console.log('PeerSuite: Enter username and choose an action: Create, Join, or Import a workspace.');
 if (setupSection && !setupSection.classList.contains('hidden')) {
+    const existingMessage = setupSection.querySelector('p.initial-setup-message');
+    if (existingMessage) existingMessage.remove(); // Remove old message if it exists
+
     const initialSetupMessage = document.createElement('p');
+    initialSetupMessage.className = 'initial-setup-message'; // Add a class for potential removal
     initialSetupMessage.textContent = 'Enter username and choose an action: Create, Join, or Import a workspace.';
     initialSetupMessage.style.textAlign = 'center';
     initialSetupMessage.style.marginTop = 'var(--space-md)';
     initialSetupMessage.style.color = 'var(--text-secondary)';
-    if (!document.querySelector('#setupSection > p')) { // Add only if not already there (e.g. from previous error)
-        setupSection.appendChild(initialSetupMessage);
-    }
+    setupSection.appendChild(initialSetupMessage);
 }
