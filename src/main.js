@@ -11,7 +11,7 @@ import {
 } from './share.js';
 import { initMediaFeatures, handleMediaPeerStream, stopAllLocalMedia, setupMediaForNewPeer, cleanupMediaForPeer } from './media.js';
 
-const APP_ID = 'PeerSuite-0.1.3-jun02'; // Example: Increment version
+const APP_ID = 'PeerSuite-0.1.4-jun17'; // Example: Increment version
 
 const wordList = [
     "able", "acid", "army", "away", "baby", "back", "ball", "band", "bank", "base",
