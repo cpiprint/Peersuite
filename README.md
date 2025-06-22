@@ -12,7 +12,7 @@ The tools included are full featured text chat, collaborative document editing, 
 
 If this is something you would like to be a part of, please send a PR.
 
-Usage: You can use https://web-tools.click online, download a docker image and run peersuite yourself, run it as a PWA on desktop or mobile, build your own docker image, or grab an executable from [releases](https://github.com/openconstruct/Peersuite/releases). 
+Usage: You can use https://peersuite.space online, download a docker image and run peersuite yourself, run it as a PWA on desktop or mobile, build your own docker image, or grab an executable from [releases](https://github.com/openconstruct/Peersuite/releases). 
 
 If you would like to report a bug or encounter any issues using Peersuite, please use github issues, or post on the forum at https://forum.peersuite.space/.
 
