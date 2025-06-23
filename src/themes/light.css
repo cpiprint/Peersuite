@@ -1,0 +1,55 @@
+/* themes/light.css */
+[data-theme="light"] {
+  --primary: #0078d7;
+  --primary-dark: #005a9e;
+  --secondary: #ef5350;
+  --bg-primary: #f5f5f5;
+  --bg-secondary: #ececec;
+  --bg-card: #ffffff;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --border-color: #d8d8d8;
+  --accent-color: var(--primary);
+  --accent-hover: var(--primary-dark);
+  --self-message: #e1f1fd;
+  --other-message: #f0f0f0;
+  --pm-self: #e7f2fa;
+  --pm-other: #f8f3e9;
+  --pm-border: var(--secondary);
+  --system-message: #f0f0f0;
+  --system-text: #555555;
+  --danger-color: #e53935;
+  --danger-hover: #c62828;
+  --info-bg: #e8f2fc;
+  --info-border: var(--primary);
+  --user-hover: #f0f0f0;
+  --file-message-bg: #e5edff;
+  --notification-dot-color: var(--secondary);
+  --space-xs: 0.2rem;
+  --space-sm: 0.4rem;
+  --space-md: 0.8rem;
+  --space-lg: 1.2rem;
+  --radius-sm: 0.2rem;
+  --radius-md: 0.3rem;
+  --transition-fast: 100ms ease;
+  --transition-normal: 150ms ease;
+  --sidebar-width: 200px;
+  --priority-low: #66bb6a;
+  --priority-medium: #ffee58;
+  --priority-high: #ef5350;
+  --priority-critical: #ab47bc;
+  --MAX_PREVIEW_DIM: 240px;
+  --MIN_PREVIEW_DIM: 140px;
+
+  --theme-display-name: "Light";
+}
+
+[data-theme="light"] .theme-switch-track {
+  background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
+  border-color: var(--border-color);
+}
+[data-theme="light"] .theme-switch-thumb {
+  transform: translateX(2px);
+  background: white;
+}
+

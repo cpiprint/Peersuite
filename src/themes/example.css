@@ -1,0 +1,150 @@
+/* themes/example.css */
+/* ==========================================================================
+   PeerSuite Example Theme File
+   ==========================================================================
+   This file serves as a template and guide for creating your own custom themes.
+   To create a new theme:
+   1. Copy this file.
+   2. Rename it to `your-theme-name.css` (e.g., `ocean-breeze.css`).
+   3. Place it in the `themes/` directory.
+   4. Modify the CSS variables and any specific overrides below.
+      All theme-specific styles MUST be within the `[data-theme="your-theme-name"]` block.
+   5. Add an entry for your theme in the `themes/themes.json` file:
+      { "id": "your-theme-name", "name": "Your Theme Display Name" }
+   Happy Theming!
+*/
+
+/* The main scoping rule for your theme.
+   Replace "example" with the EXACT filename (without .css) of your theme.
+   e.g., if your file is "ocean-breeze.css", this becomes [data-theme="ocean-breeze"] */
+[data-theme="example"] {
+
+  /* --- Core Color Palette --- */
+  /* These are the fundamental colors that define your theme's identity. */
+  --primary: #3498db;             /* Primary brand color: Used for major interactive elements, accents, active states. (Example: A nice blue) */
+  --primary-dark: #2980b9;        /* Darker shade of primary: Typically for hover/active states of primary elements. */
+  --secondary: #95a5a6;           /* Secondary accent color: For less prominent interactive elements or distinct visual highlights. (Example: A cool gray) */
+  --tertiary: #34495e;            /* Tertiary accent color: For even less emphasis or specific UI elements needing differentiation. (Example: A dark slate blue) */
+
+  /* --- Background Surfaces --- */
+  /* These define the overall backdrop of your application. */
+  --bg-primary: #ecf0f1;          /* Main application background: The most extensive background color. (Example: Very light gray) */
+  --bg-secondary: #dde4e6;        /* Secondary background: For sidebars, panes, or larger grouped sections. (Example: Slightly darker light gray) */
+  --bg-card: #ffffff;             /* Card background: For distinct content containers like chat messages, Kanban cards, settings boxes. (Example: White) */
+
+  /* --- Typography Colors --- */
+  /* Ensure good contrast for readability! */
+  --text-primary: #2c3e50;        /* Primary text color: For main content, titles, important labels. (Example: Dark desaturated blue) */
+  --text-secondary: #7f8c8d;      /* Secondary text color: For subtext, placeholders, timestamps, less critical info. (Example: Medium gray) */
+
+  /* --- Borders and Outlines --- */
+  --border-color: #bdc3c7;        /* Default border color: For inputs, cards, dividers, etc. (Example: Light gray border) */
+
+  /* --- Interactive Element Colors (can often reuse core palette) --- */
+  --accent-color: var(--primary);    /* General accent color for interactive elements: Often same as --primary. */
+  --accent-hover: var(--primary-dark);/* Hover state for accented elements. */
+
+  /* --- Chat Message Specific Colors --- */
+  --self-message: #d6eaf8;        /* Background for chat messages sent by the current user. (Example: Light blue) */
+  --other-message: #f4f6f7;       /* Background for chat messages from other users. (Example: Off-white/very light gray) */
+  --pm-self: #c0dff6;             /* Background for private messages sent by self. (Example: Slightly different light blue) */
+  --pm-other: #e1e5e8;            /* Background for private messages from others. (Example: Light cool gray) */
+  --pm-border: var(--secondary);   /* Accent border for private messages. */
+  --system-message: #ebeef0;      /* Background for system messages in chat. */
+  --system-text: var(--text-secondary); /* Text color for system messages. */
+  --file-message-bg: #dfeef9;     /* Background for file share messages. */
+
+  /* --- UI State Colors --- */
+  --danger-color: #e74c3c;        /* Destructive actions (delete), error states. (Example: Red) */
+  --danger-hover: #c0392b;      /* Hover state for danger elements. */
+  --info-bg: #d6eaf8;             /* Background for informational banners/sections. (Example: Light blue, same as self-message) */
+  --info-border: var(--primary);   /* Border for informational elements. */
+  --user-hover: #d5dade;          /* Background on hover for list items like users, channels. (Example: Lighter gray) */
+  --notification-dot-color: #e74c3c; /* Color for notification dots. (Example: Red, same as danger) */
+
+  /* --- Kanban Board Priority Indicators --- */
+  /* These are typically used for the left border of Kanban cards. */
+  --priority-low: #2ecc71;        /* Low priority. (Example: Green) */
+  --priority-medium: #f1c40f;     /* Medium priority. (Example: Yellow) */
+  --priority-high: #e67e22;       /* High priority. (Example: Orange) */
+  --priority-critical: #c0392b;  /* Critical priority. (Example: Darker Red) */
+
+  /* --- Layout, Sizing, and Animation Timing --- */
+  /* These variables control the feel and spacing of the UI. */
+  /* Adjust them to match your theme's desired density and style. */
+  --space-xs: 0.2rem;             /* Extra-small spacing unit (e.g., small icon margins). */
+  --space-sm: 0.45rem;            /* Small spacing unit (e.g., padding inside buttons, gaps). (Example: Slightly larger) */
+  --space-md: 0.9rem;             /* Medium spacing unit (e.g., component margins, section padding). (Example: Slightly larger) */
+  --space-lg: 1.35rem;            /* Large spacing unit (e.g., outer padding for sections). (Example: Slightly larger) */
+
+  --radius-sm: 0.25rem;           /* Small border-radius (buttons, inputs). */
+  --radius-md: 0.4rem;            /* Medium border-radius (cards, panes). */
+  /* You can add --radius-lg, --radius-xl if your theme uses more corner styles. */
+
+  --transition-fast: 120ms ease-out; /* Duration for fast animations (e.g., quick hovers). (Example: Slightly different timing) */
+  --transition-normal: 220ms ease-out;/* Duration for standard animations. (Example: Slightly different timing) */
+  /* You can add --transition-expressive or other named transitions if needed. */
+
+  --sidebar-width: 200px;         /* Width of the main navigation sidebar. */
+
+  /* --- Media Preview Dimensions (e.g., in Chat) --- */
+  --MAX_PREVIEW_DIM: 230px;       /* Max width/height for image previews. */
+  --MIN_PREVIEW_DIM: 130px;       /* Min width/height for image previews. */
+
+  /* --- Theme Display Name (Optional, for reference or future JS use) --- */
+  --theme-display-name: "Example Blue";
+}
+
+
+/* --- Specific Style Overrides for "example" Theme --- */
+/* Below this point, you can add specific CSS rules that only apply when
+   `data-theme="example"` is active on the <html> element.
+   This is useful for changes that go beyond simple variable swaps. */
+
+/* Example: Make all buttons in this theme have a slight text shadow */
+[data-theme="example"] .btn {
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--primary-dark); /* Example: Add a border to buttons */
+}
+
+/* Example: Different font for headings in this theme */
+[data-theme="example"] h1, [data-theme="example"] h2, [data-theme="example"] h3 {
+  /* font-family: 'Georgia', serif; */ /* Uncomment to use a different font */
+  color: var(--tertiary); /* Example: Use tertiary color for headings */
+}
+
+/* Example: Custom styling for the active sidebar button */
+[data-theme="example"] .sidebar-button.active {
+  background: var(--primary);
+  border-left: 4px solid var(--secondary); /* Example: Add a distinct left border */
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+}
+
+
+/* --- Theme Toggle Visuals for "example" Theme --- */
+/* This section defines how the theme toggle switch itself looks when this theme is active.
+   Specifically, it sets the background of the track and the position/appearance of the thumb.
+   The `transform: translateX(...)` value for `.theme-switch-thumb` is crucial for
+   visually indicating which theme is selected in a multi-theme cycle.
+   Adjust the translateX value based on the number of themes and desired thumb position.
+   For a 4-theme cycle (Light, Dark, Aero, Example), positions could be:
+   - Light: ~2px (left-most)
+   - Dark:  ~14px (second)
+   - Aero:  ~26px (third)
+   - Example: ~38px (right-most)
+   These are approximate; fine-tune by inspecting in your browser.
+*/
+
+[data-theme="example"] .theme-switch-track {
+  background: var(--bg-secondary); /* Track background for this theme */
+  border: 1px solid var(--primary);    /* Track border for this theme */
+}
+
+[data-theme="example"] .theme-switch-thumb {
+  /* Example: Position for the 4th theme in a 4-theme cycle */
+  transform: translateX(38px); /* Adjust this based on your number of themes and desired order */
+  background: var(--primary);      /* Thumb color for this theme */
+  border: 1px solid var(--bg-card);/* Thumb border for this theme */
+}
+
+/* --- End of "example" Theme Styles --- */

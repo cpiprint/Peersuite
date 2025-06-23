@@ -1,0 +1,55 @@
+/* themes/dark.css */
+[data-theme="dark"] {
+  --primary: #0078d7;
+  --primary-dark: #005a9e;
+  --secondary: #ef5350;
+  --bg-primary: #222222;
+  --bg-secondary: #2d2d2d;
+  --bg-card: #333333;
+  --text-primary: #e8e8e8;
+  --text-secondary: #b0b0b0;
+  --border-color: #444444;
+  --accent-color: var(--primary);
+  --accent-hover: var(--primary-dark);
+  --self-message: #2a4766;
+  --other-message: #343434;
+  --pm-self: #254766;
+  --pm-other: #4e4126;
+  --pm-border: var(--secondary);
+  --system-message: #2d2d2d;
+  --system-text: #a0a0a0;
+  --danger-color: #f44336;
+  --danger-hover: #d32f2f;
+  --info-bg: #263238;
+  --info-border: var(--primary);
+  --user-hover: #3a3a3a;
+  --file-message-bg: #27304d;
+  --notification-dot-color: var(--primary);
+  --space-xs: 0.2rem;
+  --space-sm: 0.4rem;
+  --space-md: 0.8rem;
+  --space-lg: 1.2rem;
+  --radius-sm: 0.2rem;
+  --radius-md: 0.3rem;
+  --transition-fast: 100ms ease;
+  --transition-normal: 150ms ease;
+  --sidebar-width: 200px;
+  --priority-low: #388e3c;
+  --priority-medium: #f9a825;
+  --priority-high: #d32f2f;
+  --priority-critical: #7b1fa2;
+  --MAX_PREVIEW_DIM: 240px;
+  --MIN_PREVIEW_DIM: 140px;
+
+  --theme-display-name: "Dark";
+}
+
+[data-theme="dark"] .theme-switch-track {
+  background: linear-gradient(135deg, #444 0%, #333 100%);
+  border-color: #666; 
+}
+[data-theme="dark"] .theme-switch-thumb {
+  transform: translateX(38px);
+  background: #666; 
+}
+

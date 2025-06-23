@@ -33,8 +33,10 @@ let startAudioCallBtn, stopAudioCallBtn, audioChatStatus;
 let localGlobalVolume = 1;
 let individualVolumes = {}; // { peerId: volumeValue (0-1) }
 
-// To keep track of screen share streams for volume control
 let peerScreenShareStreams = {}; // { peerId: MediaStream }
+
+// Helper function for the delay
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function selectMediaDomElements() {
     startShareBtn = document.getElementById('startShareBtn');
@@ -118,8 +120,6 @@ export function initMediaFeatures(dependencies) {
         setGlobalVolume,
         setIndividualVolume,
         getIndividualVolume,
-        // isAudioActiveForPeer, // No longer strictly needed for slider visibility by main.js
-        // isAnyAudioActiveForPeer, // Keep if useful for other UI down the line
     };
 }
 
@@ -158,7 +158,9 @@ export function enableMediaButtons() {
     if(startVideoCallBtn && startVideoCallBtn.title !== "Video/Audio not supported") startVideoCallBtn.disabled = false;
     if(stopVideoCallBtn) stopVideoCallBtn.disabled = true;
 
-    if(startAudioCallBtn && startAudioCallBtn.title !== "Audio not supported") startAudioCallBtn.disabled = false;
+    if(startAudioCallBtn && startAudioCallBtn.title !== "Audio not supported") {
+        startAudioCallBtn.disabled = false;
+    }
     if(stopAudioCallBtn) stopAudioCallBtn.disabled = true;
 
     updateAudioChatStatusUI();
@@ -176,12 +178,11 @@ async function startScreenSharing() {
 
         localScreenShareStream = await navigator.mediaDevices.getDisplayMedia({
             video: { cursor: "always" },
-            audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 } // Request audio with screen share
+            audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 }
         });
 
         if (localScreenSharePreviewVideo && localScreenSharePreviewContainer) {
             localScreenSharePreviewVideo.srcObject = localScreenShareStream;
-            // Mute local preview of screen share audio to prevent echo
             localScreenSharePreviewVideo.muted = true;
             localScreenSharePreviewContainer.classList.remove('hidden');
         }
@@ -194,7 +195,6 @@ async function startScreenSharing() {
         localScreenShareStream.getVideoTracks().forEach(track => {
             track.onended = () => stopLocalScreenShare(true);
         });
-        // If audio track exists, handle its end too (though video track end usually signals stream end)
         localScreenShareStream.getAudioTracks().forEach(track => {
             track.onended = () => {
                 if (!localScreenShareStream || !localScreenShareStream.active) {
@@ -202,8 +202,6 @@ async function startScreenSharing() {
                 }
             };
         });
-
-
     } catch (err) {
         console.error("Error starting screen share:", err);
         logStatusDep(`Error starting share: ${err.name === 'NotAllowedError' ? 'Permission denied.' : err.message}`, true);
@@ -250,7 +248,7 @@ function displayRemoteScreenShareStream(stream, peerId) {
         logStatusDep(`Error: Received invalid screen share stream data from ${streamPeerNickname}.`);
         return;
     }
-    peerScreenShareStreams[peerId] = stream; // Track the stream
+    peerScreenShareStreams[peerId] = stream;
 
     let videoContainer = document.getElementById(`container-screenshare-${peerId}`);
     let remoteVideo = document.getElementById(`video-screenshare-${peerId}`);
@@ -265,7 +263,7 @@ function displayRemoteScreenShareStream(stream, peerId) {
         if (currentVideoContainer && currentVideoContainer.parentNode) {
             currentVideoContainer.remove();
         }
-        delete peerScreenShareStreams[peerId]; // Untrack stream
+        delete peerScreenShareStreams[peerId];
         if (!document.getElementById(`container-screenshare-${peerId}`)) {
              logStatusDep(`Screen share from ${streamPeerNickname} has ended.`);
         }
@@ -284,12 +282,10 @@ function displayRemoteScreenShareStream(stream, peerId) {
         remoteVideo.id = `video-screenshare-${peerId}`;
         remoteVideo.autoplay = true;
         remoteVideo.playsinline = true;
-        // remoteVideo.muted = false; // Handled by applyVolumeToPeer
         videoContainer.appendChild(remoteVideo);
 
         const maximizeBtn = document.createElement('button');
         maximizeBtn.textContent = 'Maximize';
-        // ... (maximizeBtn setup)
         videoContainer.appendChild(maximizeBtn);
         if(remoteVideosContainer) remoteVideosContainer.appendChild(videoContainer);
         else console.error("remoteVideosContainer not found for screen share.")
@@ -298,7 +294,7 @@ function displayRemoteScreenShareStream(stream, peerId) {
     if (remoteVideo && remoteVideo.srcObject !== stream) {
         remoteVideo.srcObject = stream;
     }
-    applyVolumeToPeer(peerId); // Apply volume when stream is displayed/updated
+    applyVolumeToPeer(peerId);
 
     stream.oninactive = cleanupScreenShareUI;
     stream.getTracks().forEach(track => {
@@ -317,7 +313,6 @@ export function setLocalVideoFlip(shouldFlip, forceApply = false) {
 }
 
 function addLocalVideoToGrid() {
-    // ... (no changes needed here regarding volume)
     if (!localVideoCallStream || !remoteVideoChatContainer || localVideoPreviewElement) return;
     const wrapper = document.createElement('div');
     wrapper.classList.add('remote-video-wrapper', 'local-preview-in-grid');
@@ -337,13 +332,11 @@ function addLocalVideoToGrid() {
 }
 
 function removeLocalVideoFromGrid() {
-    // ... (no changes needed here)
     if (localVideoPreviewElement && localVideoPreviewElement.parentNode) { localVideoPreviewElement.remove(); }
     localVideoPreviewElement = null;
 }
 
 async function startLocalVideoCall() {
-    // ... (no changes needed here regarding volume)
     if (!roomApiDep) { logStatusDep("Not in a room to start video call.", true); return; }
     try {
         if (!navigator.mediaDevices?.getUserMedia) { logStatusDep("Video call not supported by your browser.", true); return; }
@@ -366,7 +359,6 @@ async function startLocalVideoCall() {
 }
 
 async function stopLocalVideoCall(updateButtons = true) {
-    // ... (no changes needed here)
     logStatusDep("Stopping video call...");
     removeLocalVideoFromGrid();
     if (localVideoCallStream) {
@@ -402,7 +394,6 @@ function handleIncomingVideoChatStream(stream, peerId) {
         nicknameP.textContent = streamPeerNickname;
         const videoEl = document.createElement('video');
         videoEl.autoplay = true; videoEl.playsinline = true;
-        // videoEl.muted = false; // Handled by applyVolumeToPeer
         wrapper.appendChild(nicknameP); wrapper.appendChild(videoEl);
         if(remoteVideoChatContainer) remoteVideoChatContainer.appendChild(wrapper);
         else console.error("remoteVideoChatContainer not found for video chat.")
@@ -412,12 +403,12 @@ function handleIncomingVideoChatStream(stream, peerId) {
 
     if (peerElement.video.srcObject !== stream) {
         peerElement.video.srcObject = stream;
-        peerElement.stream = stream; // Update stream reference
+        peerElement.stream = stream;
     }
     if (peerElement.nicknameP.textContent !== streamPeerNickname) {
         peerElement.nicknameP.textContent = streamPeerNickname;
     }
-    applyVolumeToPeer(peerId); // Apply volume when stream is displayed/updated
+    applyVolumeToPeer(peerId);
 
     stream.oninactive = cleanupVideoChatUI;
     stream.getTracks().forEach(track => {
@@ -427,12 +418,77 @@ function handleIncomingVideoChatStream(stream, peerId) {
 }
 
 
-function updateAudioChatStatusUI() { /* ... (no changes) ... */ }
-export function updatePttSettings(enabled, key, display) { /* ... (no changes) ... */ }
-function handlePttKeyDown(event) { /* ... (no changes) ... */ }
-function handlePttKeyUp(event) { /* ... (no changes) ... */ }
-async function startLocalAudioCall() { /* ... (no changes needed for volume logic here) ... */ }
-async function stopLocalAudioCall(updateButtons = true) { /* ... (no changes) ... */ }
+async function startLocalAudioCall() {
+    if (!roomApiDep) { 
+        logStatusDep("Not in a room to start audio call.", true); 
+        return; 
+    }
+    try {
+
+        await delay(50);
+
+        if (!navigator.mediaDevices?.getUserMedia) { 
+            logStatusDep("Audio call not supported by your browser.", true); 
+            return; 
+        }
+        if (localAudioStream) {
+            await stopLocalAudioCall(true);
+        }
+
+        localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        
+        if (pttEnabled && localAudioStream) {
+            localAudioStream.getAudioTracks().forEach(track => track.enabled = isPttKeyDown);
+        } else if (localAudioStream) {
+            localAudioStream.getAudioTracks().forEach(track => track.enabled = true);
+        }
+        
+        await roomApiDep.addStream(localAudioStream, null, { streamType: 'audiochat' });
+
+        if(startAudioCallBtn) startAudioCallBtn.disabled = true;
+        if(stopAudioCallBtn) stopAudioCallBtn.disabled = false;
+
+        logStatusDep("Audio call started.");
+        showNotificationDep('audioChatSection');
+        updateAudioChatStatusUI();
+
+        localAudioStream.getTracks().forEach(track => {
+            track.onended = () => {
+                stopLocalAudioCall(true);
+            };
+        });
+    } catch (err) {
+        console.error("Error starting audio call:", err);
+        logStatusDep(`Error starting audio call: ${err.name === 'NotAllowedError' ? 'Permission denied.' : err.message}`, true);
+        
+        if (localAudioStream) {
+            localAudioStream.getTracks().forEach(track => track.stop());
+            localAudioStream = null;
+        }
+        if (roomApiDep && startAudioCallBtn && stopAudioCallBtn) {
+            startAudioCallBtn.disabled = (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) ? false : true;
+            stopAudioCallBtn.disabled = true;
+        }
+        updateAudioChatStatusUI();
+    }
+}
+
+async function stopLocalAudioCall(updateButtons = true) {
+    logStatusDep("Stopping audio call...");
+    if (localAudioStream) {
+        if (roomApiDep?.removeStream) { 
+            try { await roomApiDep.removeStream(localAudioStream, null, { streamType: 'audiochat' }); } 
+            catch(e) { console.error("Exception calling roomApi.removeStream for audio call:", e); }
+        }
+        localAudioStream.getTracks().forEach(track => { track.onended = null; track.stop(); });
+        localAudioStream = null;
+    }
+    if (updateButtons && roomApiDep && startAudioCallBtn && stopAudioCallBtn) {
+        startAudioCallBtn.disabled = (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) ? false : true;
+        stopAudioCallBtn.disabled = true;
+    }
+    updateAudioChatStatusUI();
+}
 
 function handleIncomingAudioChatStream(stream, peerId) {
     if (peerId === localGeneratedPeerIdDep) return;
@@ -447,7 +503,6 @@ function handleIncomingAudioChatStream(stream, peerId) {
             if (audioData.audio_element.parentNode) { audioData.audio_element.remove(); }
         }
         delete peerAudios[peerId];
-        // Individual volume persists until peer leaves, so not deleted here.
         if (!peerAudios[peerId]) { logStatusDep(`Audio chat from ${streamPeerNickname} has ended.`); }
     };
 
@@ -459,8 +514,7 @@ function handleIncomingAudioChatStream(stream, peerId) {
 
     audioEl.srcObject = stream;
     audioEl.autoplay = true;
-    // audioEl.muted = false; // Handled by applyVolumeToPeer
-    applyVolumeToPeer(peerId); // Apply volume when stream is displayed/updated
+    applyVolumeToPeer(peerId);
     audioEl.play().catch(e => console.warn(`Audio play failed for ${streamPeerNickname}:`, e));
     audioEl.addEventListener('error', (e) => { console.error(`Error with audio element for ${streamPeerNickname}:`, e); });
 
@@ -489,8 +543,17 @@ export function handleMediaPeerStream(stream, peerId, metadata) {
     }
 }
 
-export async function stopAllLocalMedia(updateButtons = true) { /* ... (no changes) ... */ }
-export function setupMediaForNewPeer(joinedPeerId) { /* ... (no changes) ... */ }
+export async function stopAllLocalMedia(updateButtons = true) {
+    await stopLocalScreenShare(updateButtons);
+    await stopLocalVideoCall(updateButtons);
+    await stopLocalAudioCall(updateButtons);
+}
+
+export function setupMediaForNewPeer(joinedPeerId) {
+    if (localScreenShareStream) roomApiDep.addStream(localScreenShareStream, joinedPeerId, { streamType: 'screenshare' });
+    if (localVideoCallStream) roomApiDep.addStream(localVideoCallStream, joinedPeerId, { streamType: 'videochat' });
+    if (localAudioStream) roomApiDep.addStream(localAudioStream, joinedPeerId, { streamType: 'audiochat' });
+}
 
 export function cleanupMediaForPeer(leftPeerId) {
     const screenShareVideoContainer = document.getElementById(`container-screenshare-${leftPeerId}`);
@@ -513,28 +576,23 @@ export function cleanupMediaForPeer(leftPeerId) {
         if (peerAudios[leftPeerId].audio_element.parentNode) { peerAudios[leftPeerId].audio_element.remove(); }
     }
     delete peerAudios[leftPeerId];
-    delete individualVolumes[leftPeerId]; // This is the correct place to clear individual volume
+    delete individualVolumes[leftPeerId];
 
     if (updateUserListDep) { updateUserListDep(); }
 }
 
 export function resetMediaUIAndState() {
-    // ... (Stop local streams) ...
     if (localScreenShareStream) { localScreenShareStream.getTracks().forEach(t => t.stop()); localScreenShareStream = null; }
     if (localVideoCallStream) { localVideoCallStream.getTracks().forEach(t => t.stop()); localVideoCallStream = null; }
     if (localAudioStream) { localAudioStream.getTracks().forEach(t => t.stop()); localAudioStream = null; }
     isPttKeyDown = false;
 
-
-    // ... (Reset UI elements) ...
     if(remoteVideosContainer) remoteVideosContainer.innerHTML = '';
     if(localScreenSharePreviewVideo) localScreenSharePreviewVideo.srcObject = null;
     if(localScreenSharePreviewContainer) localScreenSharePreviewContainer.classList.add('hidden');
     removeLocalVideoFromGrid();
     if(remoteVideoChatContainer) remoteVideoChatContainer.innerHTML = '';
 
-
-    // Reset collections
     peerVideoElements = {};
     Object.values(peerAudios).forEach(audioData => {
         if (audioData && audioData.audio_element) {
@@ -543,17 +601,74 @@ export function resetMediaUIAndState() {
     });
     peerAudios = {};
     peerScreenShareStreams = {};
-    individualVolumes = {}; // Reset all individual volumes
+    individualVolumes = {};
 
     updateAudioChatStatusUI();
     enableMediaButtons();
 }
 
-export function updatePeerNicknameInUI(peerId, newNickname) { /* ... (no changes) ... */ }
+export function updatePeerNicknameInUI(peerId, newNickname) {
+    if (peerVideoElements[peerId] && peerVideoElements[peerId].nicknameP) {
+        peerVideoElements[peerId].nicknameP.textContent = newNickname;
+    }
+    const screenShareContainer = document.getElementById(`container-screenshare-${peerId}`);
+    if (screenShareContainer) {
+        const pElement = screenShareContainer.querySelector('p');
+        if (pElement) pElement.textContent = `Screen from: ${newNickname}`;
+    }
+}
+function updateAudioChatStatusUI() {
+    if(audioChatStatus) {
+        const isActive = !!localAudioStream;
+        audioChatStatus.classList.toggle('hidden', !isActive);
+        audioChatStatus.textContent = isActive ? `Audio call active ${pttEnabled ? '(Push-to-Talk enabled)' : ''}` : 'Audio call inactive.';
+    }
+}
+export function updatePttSettings(enabled, key, display) {
+    const oldPttEnabled = pttEnabled;
+    pttEnabled = enabled;
+    pttKey = key;
+    pttKeyDisplay = display;
 
-// --- Volume Control Functions ---
+    if (pttEnabled && !oldPttEnabled) {
+        window.addEventListener('keydown', handlePttKeyDown);
+        window.addEventListener('keyup', handlePttKeyUp);
+        if (localAudioStream) {
+            localAudioStream.getAudioTracks().forEach(track => track.enabled = isPttKeyDown);
+        }
+    } else if (!pttEnabled && oldPttEnabled) {
+        window.removeEventListener('keydown', handlePttKeyDown);
+        window.removeEventListener('keyup', handlePttKeyUp);
+        isPttKeyDown = false; 
+        if (localAudioStream) {
+            localAudioStream.getAudioTracks().forEach(track => track.enabled = true);
+        }
+    }
+    updateAudioChatStatusUI();
+}
+function handlePttKeyDown(event) {
+    if (!pttEnabled || event.repeat || event.code !== pttKey) return;
+    if (!isPttKeyDown) {
+        isPttKeyDown = true;
+        if (localAudioStream) {
+            localAudioStream.getAudioTracks().forEach(track => track.enabled = true);
+            logStatusDep("PTT active: Mic on");
+        }
+    }
+}
+function handlePttKeyUp(event) {
+    if (!pttEnabled || event.code !== pttKey) return;
+    if (isPttKeyDown) {
+        isPttKeyDown = false;
+        if (localAudioStream) {
+            localAudioStream.getAudioTracks().forEach(track => track.enabled = false);
+            logStatusDep("PTT inactive: Mic off");
+        }
+    }
+}
+
 function applyVolumeToPeer(peerId) {
-    const individualVol = getIndividualVolume(peerId); // Use getter to ensure default
+    const individualVol = getIndividualVolume(peerId);
     const targetVolume = localGlobalVolume * individualVol;
 
     if (peerAudios[peerId] && peerAudios[peerId].audio_element) {
@@ -561,26 +676,20 @@ function applyVolumeToPeer(peerId) {
     }
     if (peerVideoElements[peerId] && peerVideoElements[peerId].video) {
         peerVideoElements[peerId].video.volume = targetVolume;
-         // It's generally good to ensure video is not muted if we are controlling volume,
-        // but be mindful if users can mute videos directly via browser controls.
-        // peerVideoElements[peerId].video.muted = targetVolume === 0; // Or just false
     }
     const screenShareVideo = document.getElementById(`video-screenshare-${peerId}`);
     if (screenShareVideo && peerScreenShareStreams[peerId] && peerScreenShareStreams[peerId].getAudioTracks().length > 0) {
         screenShareVideo.volume = targetVolume;
-        // screenShareVideo.muted = targetVolume === 0; // Or just false
     }
 }
 
 export function setGlobalVolume(volume, applyToElements = true) {
-    localGlobalVolume = Math.max(0, Math.min(1, volume)); // Clamp volume
+    localGlobalVolume = Math.max(0, Math.min(1, volume));
     if (applyToElements) {
         const connectedPeers = getPeerNicknamesDep ? Object.keys(getPeerNicknamesDep()) : [];
-        // Also include localGeneratedPeerIdDep if you might have local previews with controllable audio that aren't self-muted
         const allRelevantPeerIds = new Set([...connectedPeers, localGeneratedPeerIdDep]);
 
         allRelevantPeerIds.forEach(peerId => {
-             // Check if peerId exists in our tracking; getPeerNicknames might include peers not yet fully processed by media
             if (peerAudios[peerId] || peerVideoElements[peerId] || peerScreenShareStreams[peerId]) {
                 applyVolumeToPeer(peerId);
             }
@@ -589,7 +698,7 @@ export function setGlobalVolume(volume, applyToElements = true) {
 }
 
 export function setIndividualVolume(peerId, volume) {
-    individualVolumes[peerId] = Math.max(0, Math.min(1, volume)); // Clamp volume
+    individualVolumes[peerId] = Math.max(0, Math.min(1, volume));
     applyVolumeToPeer(peerId);
 }
 
