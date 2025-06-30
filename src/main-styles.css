@@ -504,3 +504,61 @@ input::placeholder, textarea::placeholder { color: var(--text-secondary); opacit
     justify-content: flex-end; margin-top: var(--space-xs);
   }
 }
+
+/* --- NEW STYLES FOR THREADING --- */
+.replying-to-banner {
+  padding: var(--space-sm) var(--space-md);
+  margin-top: var(--space-md);
+  font-size: 0.85em;
+  background-color: var(--info-bg);
+  border: 1px solid var(--info-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#cancelReplyBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--danger-color);
+  font-weight: bold;
+  padding: 0 var(--space-sm);
+  font-size: 1.1em;
+}
+
+.reply-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 1.2em;
+  padding: 0 var(--space-sm);
+  margin-left: var(--space-sm);
+  opacity: 0.5;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.message:hover .reply-btn {
+  opacity: 1;
+}
+
+.reply-btn:hover {
+  color: var(--accent-color);
+}
+
+.thread-replies-container {
+  margin-left: var(--space-lg);
+  padding-left: var(--space-md);
+  border-left: 2px solid var(--border-color);
+  margin-top: var(--space-md);
+}
+
+.message-thread-container {
+  /* This wrapper helps contain a message and all its replies */
+  padding-bottom: var(--space-sm);
+}

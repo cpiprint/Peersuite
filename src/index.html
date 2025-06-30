@@ -139,6 +139,11 @@
                 <div class="chat-section-content">
                     <div class="chat-main section-pane">
                         <div id="chatArea"></div>
+                        <!-- NEW: Banner for reply context -->
+                        <div id="replyingToBanner" class="replying-to-banner hidden card">
+                            <span id="replyingToText"></span>
+                            <button id="cancelReplyBtn" title="Cancel Reply">✖</button>
+                        </div>
                         <div class="chat-input-area">
                             <input type="text" id="messageInput" placeholder="Type message or /pm User message">
                             <span id="triggerFileInput" class="file-attach-icon" title="Attach File">📎</span>
